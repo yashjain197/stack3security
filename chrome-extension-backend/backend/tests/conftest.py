@@ -19,6 +19,10 @@ os.environ["COOKIE_SECURE"] = "true"
 os.environ["JWT_PRIVATE_KEY"] = ""
 os.environ["SMTP_HOST"] = ""
 os.environ["RESEND_API_KEY"] = ""
+os.environ["TIGERGRAPH_HOST"] = ""
+os.environ["TIGERGRAPH_SECRET"] = ""
+os.environ["TIGERGRAPH_PASSWORD"] = ""
+os.environ["TIGERGRAPH_API_KEY"] = ""
 
 import subprocess
 import sys
@@ -37,6 +41,12 @@ from app.modules.billing.service import sync_product_ids
 WEB_ORIGIN = "http://localhost:3000"
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 USER_TABLES = [
+    "graph_report_edges",
+    "graph_report_nodes",
+    "graph_edges",
+    "graph_node_attributes",
+    "graph_reports",
+    "graph_nodes",
     "webhook_events",
     "subscriptions",
     "billing_customers",

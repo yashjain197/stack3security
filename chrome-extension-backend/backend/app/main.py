@@ -21,6 +21,10 @@ from app.core.rate_limit import init_rate_limiter
 from app.db.session import dispose_engine, get_session_factory
 from app.modules.billing.router import router as billing_router
 from app.modules.billing.service import sync_product_ids
+from app.modules.graph.router import router as graph_router
+from app.modules.graph.seed import ensure_seed
+from app.modules.graph.tigergraph import close_tigergraph
+from app.modules.graph.worker import start_graph_sync, stop_graph_sync
 from app.modules.identity.router import jwks_router, me_router
 from app.modules.identity.router import router as auth_router
 from app.modules.teams.router import router as teams_router
@@ -37,8 +41,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_rate_limiter(app.state.redis)
     async with get_session_factory()() as session:
         await sync_product_ids(session)
+        await ensure_seed(session)
+    start_graph_sync()
     logger.info("startup_complete", env=settings.env)
     yield
+    await stop_graph_sync()
+    await close_tigergraph()
     if app.state.redis is not None:
         await app.state.redis.aclose()
     await dispose_engine()
@@ -77,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(me_router)
     app.include_router(billing_router)
     app.include_router(teams_router)
+    app.include_router(graph_router)
     return app
 
 
