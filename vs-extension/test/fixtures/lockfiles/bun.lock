@@ -1,0 +1,13 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": { "name": "golden", "dependencies": { "lodash": "4.17.21" } },
+  },
+  "packages": {
+    "@types/node": ["@types/node@22.20.5", "", {}, "sha512-aaa"],
+    "lodash": ["lodash@4.17.21", "", {}, "sha512-bbb"],
+    "semver": ["semver@7.6.0", "", {}, "sha512-ccc"],
+    "local": ["local@file:vendor/local", {}],
+    "golden": ["golden@workspace:."],
+  },
+}

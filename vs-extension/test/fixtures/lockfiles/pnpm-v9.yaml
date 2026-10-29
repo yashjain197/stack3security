@@ -1,0 +1,27 @@
+lockfileVersion: '9.0'
+
+importers:
+  .:
+    dependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+packages:
+  '@types/node@22.20.5':
+    resolution: {integrity: sha512-aaa}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-bbb}
+
+  semver@7.6.0:
+    resolution: {integrity: sha512-ccc}
+    engines: {node: '>=10'}
+
+  local@file:vendor/local:
+    resolution: {directory: vendor/local, type: directory}
+
+snapshots:
+  '@types/node@22.20.5': {}
+  lodash@4.17.21: {}
+  semver@7.6.0: {}
