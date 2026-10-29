@@ -25,6 +25,7 @@ services:
     <<: *hardened
     build:
       context: .
+      target: dev              # the Dockerfile's default target is the repo-scan service
       network: host            # build-time only: the default bridge stalls on some hosts (apt/npm downloads). Runtime stays isolated.
     network_mode: none         # tests must not reach the network (I-6, I-16)
     command: ["npm", "test"]

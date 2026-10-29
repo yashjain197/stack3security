@@ -1,12 +1,8 @@
 import * as vscode from 'vscode';
+import { DEFAULT_LIMITS, type ScanLimits } from './limits';
 
-export interface ScanLimits {
-  maxFiles: number;
-  maxFileBytes: number;
-  maxTotalBytes: number;
-  maxDepth: number;
-  timeoutMs: number;
-}
+export { DEFAULT_LIMITS };
+export type { ScanLimits };
 
 export interface Stack3Settings {
   apiUrl: string;
@@ -21,14 +17,6 @@ export interface Stack3Settings {
 
 export const DEFAULT_OLLAMA_MODEL = 'qwen2.5-coder:7b';
 const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
-
-export const DEFAULT_LIMITS: Readonly<ScanLimits> = Object.freeze({
-  maxFiles: 20000,
-  maxFileBytes: 1048576,
-  maxTotalBytes: 52428800,
-  maxDepth: 32,
-  timeoutMs: 30000,
-});
 
 // Read only the user (global) value. A workspace or folder value comes from the
 // repo's own .vscode/settings.json, which is attacker-controlled (I-10).
