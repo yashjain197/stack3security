@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import type * as vscode from 'vscode';
-import { renderHtml, showVerdictPanel, __resetPanels } from '../../src/ui/panel';
+import { closePanel, renderHtml, showVerdictPanel, __resetPanels } from '../../src/ui/panel';
 import { buildView } from '../../src/ui/view';
 import { __calls, __docs, __panels, __reset } from '../mocks/vscode';
 import { called, makeHandlers, makeRec, SCAN_ID } from './helpers';
@@ -122,6 +122,23 @@ describe('showVerdictPanel', () => {
     expect(__panels).toHaveLength(1);
     expect(__panels[0]!.revealed).toBe(1);
     expect(__panels[0]!.posted).toHaveLength(1);
+  });
+  test('a re-scan with a different verdict replaces the panel, so its buttons follow the new verdict', () => {
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('caution'), handlers);
+    showVerdictPanel(ctx(), makeRec('critical', { scanSetHash: 'changed!!' }), handlers);
+    expect(__panels).toHaveLength(2);
+    expect(__panels[0]!.disposed).toBe(true);
+    __panels[1]!.receive({ type: 'ready' });
+    expect(__panels[1]!.posted[0]).toMatchObject({ view: { level: 'critical' } });
+  });
+  test('closePanel closes the panel for a scan and ignores unknown ones', () => {
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('high'), handlers);
+    closePanel('cd'.repeat(32));
+    expect(__panels[0]!.disposed).toBe(false);
+    closePanel(SCAN_ID);
+    expect(__panels[0]!.disposed).toBe(true);
   });
   test('after the panel is closed a new one can be opened', () => {
     const { handlers } = makeHandlers();

@@ -10,6 +10,8 @@ export interface ScanRecord {
   verdict: Verdict;
   scanSetHash: string;
   createdAt: number;
+  /** Set when the user opened the clone. Such a clone is theirs now and is not deleted automatically. */
+  openedAt?: number;
 }
 
 /** The slice of `vscode.Memento` the registry needs, so it can be tested without VS Code. */
@@ -53,6 +55,15 @@ export class Registry {
     await this.store.update(KEY, next.slice(-MAX_RECORDS));
   }
 
+  async markOpened(scanId: string, now: number = Date.now()): Promise<void> {
+    await this.store.update(KEY, this.list().map((r) => (r.scanId === scanId ? { ...r, openedAt: now } : r)));
+  }
+
+  /** Directories of clones the user opened. */
+  openedDirs(): Set<string> {
+    return new Set(this.list().filter((r) => r.openedAt !== undefined).map((r) => r.dir));
+  }
+
   async remove(scanId: string): Promise<void> {
     await this.store.update(KEY, this.list().filter((r) => r.scanId !== scanId));
   }
@@ -61,7 +72,7 @@ export class Registry {
   async pruneOlderThan(days: number, now: number = Date.now()): Promise<string[]> {
     const dropped: string[] = [];
     for (const r of this.list()) {
-      if (now - r.createdAt <= days * 86_400_000) continue;
+      if (r.openedAt !== undefined || now - r.createdAt <= days * 86_400_000) continue;
       try {
         await this.removeDir(r.dir);
         dropped.push(r.scanId);

@@ -1,12 +1,16 @@
 // Minimal stand-in for the `vscode` module in unit tests.
 type Inspect = { defaultValue?: unknown; globalValue?: unknown; workspaceValue?: unknown; workspaceFolderValue?: unknown };
 const inspections = new Map<string, Inspect>();
+export const __config = { updates: [] as { section: string; key: string; value: unknown; target: number }[], failUpdate: false };
+export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;
 
 export function __setInspect(section: string, key: string, value: Inspect): void {
   inspections.set(`${section}.${key}`, value);
 }
 export function __resetInspect(): void {
   inspections.clear();
+  __config.updates = [];
+  __config.failUpdate = false;
 }
 
 export const workspace = {
@@ -16,6 +20,11 @@ export const workspace = {
       get: (key: string) => {
         const i = inspections.get(`${section}.${key}`);
         return i?.workspaceFolderValue ?? i?.workspaceValue ?? i?.globalValue ?? i?.defaultValue;
+      },
+      update: async (key: string, value: unknown, target: number) => {
+        if (__config.failUpdate) throw new Error('cannot write settings');
+        __config.updates.push({ section, key, value, target });
+        if (target === 1) inspections.set(`${section}.${key}`, { ...inspections.get(`${section}.${key}`), globalValue: value });
       },
     };
   },
@@ -33,8 +42,10 @@ export const __calls = {
   lastInputOptions: undefined as { validateInput?: (v: string) => string | undefined; ignoreFocusOut?: boolean } | undefined,
 };
 export function __reset(): void {
+  __config.updates = [];
+  __config.failUpdate = false;
   __panels.length = 0;
-  __docs.opened = []; __docs.shown = 0; __docs.language = []; __docs.clipboard = ''; __docs.warningAnswer = undefined; __docs.lastWarning = undefined; __docs.providers.clear();
+  __docs.opened = []; __docs.shown = 0; __docs.language = []; __docs.clipboard = ''; __docs.warningAnswer = undefined; __docs.infoAnswer = undefined; __docs.lastInfo = undefined; __docs.infoCalls = []; __docs.lastWarning = undefined; __docs.providers.clear();
   __calls.registered = [];
   __calls.handlers = new Map();
   __calls.errors = [];
@@ -62,7 +73,12 @@ export const window = {
   },
   showErrorMessage: async (m: string) => void __calls.errors.push(m),
   showWarningMessage: async (m: string) => void __calls.warnings.push(m),
-  showInformationMessage: async (m: string) => void __calls.infos.push(m),
+  showInformationMessage: async (...args: unknown[]) => {
+    if (typeof args[0] === 'string') __calls.infos.push(args[0]);
+    __docs.lastInfo = args;
+    __docs.infoCalls.push(args);
+    return __docs.infoAnswer;
+  },
   withProgress: async <T>(_o: unknown, task: (p: { report: (v: unknown) => void }) => Promise<T>) => {
     __calls.progress++;
     return task({ report: () => undefined });
@@ -92,7 +108,7 @@ export interface MockPanel {
   dispose(): void;
 }
 export const __panels: MockPanel[] = [];
-export const __docs = { opened: [] as string[], shown: 0, language: [] as string[], clipboard: '' , warningAnswer: undefined as string | undefined, lastWarning: undefined as unknown[] | undefined, providers: new Map<string, { provideTextDocumentContent(uri: Uri): unknown }>() };
+export const __docs = { opened: [] as string[], shown: 0, language: [] as string[], clipboard: '' , warningAnswer: undefined as string | undefined, infoAnswer: undefined as string | undefined, lastInfo: undefined as unknown[] | undefined, infoCalls: [] as unknown[][], lastWarning: undefined as unknown[] | undefined, providers: new Map<string, { provideTextDocumentContent(uri: Uri): unknown }>() };
 
 (window as Record<string, unknown>).createWebviewPanel = ((viewType: string, title: string, _col: unknown, options: Record<string, unknown>) => {
   let onMessage: (raw: unknown) => void = () => undefined;

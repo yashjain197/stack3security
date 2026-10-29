@@ -88,3 +88,33 @@ export async function cloneAndScan(input: string, deps: CloneAndScanDeps): Promi
   }
   return { ok: true, value: record };
 }
+
+export type RescanDeps = Pick<CloneAndScanDeps, 'scan' | 'client' | 'registry' | 'showPanel' | 'showError' | 'report' | 'now'>;
+
+/**
+ * Scan a clone again after its files changed since the first scan. Same commit, so the same scan id; the new verdict
+ * and content hash replace the old record, and the result is shown fresh. Nothing is opened.
+ */
+export async function rescanRecord(rec: ScanRecord, deps: RescanDeps): Promise<Result<ScanRecord>> {
+  const report = (m: string) => deps.report?.(m);
+  report('Scanning files…');
+  const local = await deps.scan(rec.dir);
+  report('Checking packages…');
+  const remote = await deps.client.scanPackage(local.purls);
+  const verdict = buildVerdict(local, remote, rec.verdict.target, NO_INDICATORS);
+  let next: ScanRecord;
+  try {
+    next = { ...rec, verdict, scanSetHash: await hashScanSet(rec.dir), createdAt: (deps.now ?? Date.now)() };
+    await deps.registry.add(next);
+  } catch {
+    deps.showError('Could not save the new scan result.');
+    return { ok: false, reason: 'Could not save the new scan result.' };
+  }
+  try {
+    await deps.showPanel(next);
+  } catch {
+    deps.showError('The result could not be shown. The scan was saved.');
+    return { ok: false, reason: 'The result could not be shown. The scan was saved.' };
+  }
+  return { ok: true, value: next };
+}

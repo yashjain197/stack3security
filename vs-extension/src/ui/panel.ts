@@ -44,7 +44,7 @@ export interface PanelHooks {
   confirm?(title: string, detail: string, okLabel: string): Promise<boolean>;
 }
 
-const panels = new Map<string, vscode.WebviewPanel>();
+const panels = new Map<string, { panel: vscode.WebviewPanel; rec: ScanRecord }>();
 
 const modalConfirm = async (title: string, detail: string, okLabel: string): Promise<boolean> =>
   (await vscode.window.showWarningMessage(title, { modal: true, detail }, okLabel)) === okLabel;
@@ -53,11 +53,13 @@ const modalConfirm = async (title: string, detail: string, okLabel: string): Pro
 export function showVerdictPanel(ctx: vscode.ExtensionContext, rec: ScanRecord, handlers: ActionHandlers, hooks: PanelHooks = {}): void {
   const view = buildView(rec);
   const existing = panels.get(rec.scanId);
-  if (existing) {
-    existing.reveal();
-    void existing.webview.postMessage({ type: 'verdict', scanId: rec.scanId, view });
+  if (existing && existing.rec.scanSetHash === rec.scanSetHash && existing.rec.verdict.level === rec.verdict.level) {
+    existing.panel.reveal();
+    void existing.panel.webview.postMessage({ type: 'verdict', scanId: rec.scanId, view });
     return;
   }
+  // A re-scan produced a different verdict. The old panel's bridge is bound to the old verdict, so replace it.
+  existing?.panel.dispose();
 
   const root = hooks.webviewRoot ?? vscode.Uri.joinPath(ctx.extensionUri, 'dist', 'webview');
   const panel = vscode.window.createWebviewPanel('stack3.verdict', `Stack3: ${clip(rec.verdict.target.id, 60)}`, vscode.ViewColumn.Active, {
@@ -66,7 +68,7 @@ export function showVerdictPanel(ctx: vscode.ExtensionContext, rec: ScanRecord, 
     localResourceRoots: [root],
     retainContextWhenHidden: false,
   });
-  panels.set(rec.scanId, panel);
+  panels.set(rec.scanId, { panel, rec });
 
   const registry = new Registry(ctx.globalState);
   const bridge = createBridge({
@@ -85,7 +87,14 @@ export function showVerdictPanel(ctx: vscode.ExtensionContext, rec: ScanRecord, 
   const web = panel.webview;
   web.html = renderHtml(web.cspSource, nonce, web.asWebviewUri(vscode.Uri.joinPath(root, 'main.js')).toString(), web.asWebviewUri(vscode.Uri.joinPath(root, 'styles.css')).toString());
   web.onDidReceiveMessage((raw: unknown) => void bridge.handle(raw));
-  panel.onDidDispose(() => panels.delete(rec.scanId));
+  panel.onDidDispose(() => {
+    if (panels.get(rec.scanId)?.panel === panel) panels.delete(rec.scanId);
+  });
+}
+
+/** Close the panel for a scan (after its clone was deleted). */
+export function closePanel(scanId: string): void {
+  panels.get(scanId)?.panel.dispose();
 }
 
 /** Test seam: forget open panels. */

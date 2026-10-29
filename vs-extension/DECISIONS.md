@@ -100,8 +100,20 @@ This file is kept separate from [`ARCHITECTURE.md`](./ARCHITECTURE.md). Each ent
 - **Evidence:** Task 8 parsers; test `lockfiles get a higher per-file cap`.
 - **Not covered:** A lockfile over 16 MiB is still truncated and reported as not fully checked.
 
+## Verification results
+
+### V-4: `task.allowAutomaticTasks` (verified 2026-10-30)
+- **Result:** Confirmed in a real VS Code 1.142.0 (`npm run test:integration`, suite `open-canary`). With the user-level setting `"on"`, a folder whose `.vscode/tasks.json` has a `folderOpen` task ran it on open (control). With the user-level setting `"off"`, the same folder did not. The value is honoured at user scope, which is where D-7 writes it.
+- **Also shown:** a clone opened through Stack3's "Open with auto-run disabled" (D-4) did not run its task even with the setting `"on"`.
+- **Not covered:** the value `"auto"` (the default, which prompts), and workspace-level overrides.
+
+### V-1: Workspace Trust and trusted parent folders (NOT yet verified, needs a person)
+- **Why not:** it is a question about what VS Code's trust prompt shows, and the test runs VS Code with trust disabled. The result cannot be observed unattended.
+- **How to check (2 minutes):** in VS Code, trust a parent folder such as `/tmp` (Manage Workspace Trust > Trusted Folders > Add). Run "Stack3: Clone and scan safely" on any repo, press Open (not "with auto-run disabled") and note whether a trust prompt appears for the clone.
+- **Why it matters little:** D-4 does not depend on the answer. A neutralized open removes the auto-run files, so it is safe whether or not VS Code trusts the folder. It only decides how much the plain Open button can be trusted to show a prompt.
+
 ## Open questions (not yet ratified)
 
-- V-1 to V-10 in the blueprint §0.5 must be verified, or accepted as risks here.
+- V-1 to V-10 in the blueprint §0.5 must be verified, or accepted as risks here. V-4 is verified (above). V-1 needs a person.
 - Who owns server-side retention and logging of `/explain` and `/report` payloads?
 - What is the minimum `engines.vscode` version? It depends on which APIs ship (V-2, V-3).

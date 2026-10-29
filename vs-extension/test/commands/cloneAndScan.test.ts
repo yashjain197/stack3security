@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Result } from '../../src/api/client';
-import { cloneAndScan, type CloneAndScanDeps } from '../../src/commands/cloneAndScan';
+import { cloneAndScan, rescanRecord, type CloneAndScanDeps } from '../../src/commands/cloneAndScan';
 import { ENGINE_VERSION } from '../../src/engine/version';
 import type { EngineResult, Finding } from '../../src/engine/types';
 import { Registry, scanIdFor, type KeyValueStore, type ScanRecord } from '../../src/quarantine/registry';
@@ -185,5 +185,42 @@ describe('ENGINE_VERSION', () => {
   });
   test('the scanned set is absent from the filesystem only if removed', () => {
     expect(existsSync(join(tmpdir(), 'definitely-not-here-stack3'))).toBe(false);
+  });
+});
+
+describe('rescanRecord', () => {
+  test('scans the same clone again, replaces the record (same id, new hash and verdict) and shows it', async () => {
+    const t = setup({ local: { findings: [f('high', 'a')], notChecked: [], purls: [] } });
+    const first = await cloneAndScan(URL_, t.deps);
+    if (!first.ok) throw new Error('setup');
+    writeFileSync(join(first.value.dir, 'package.json'), '{"name":"changed"}');
+    t.deps.scan = vi.fn(async () => ({ findings: [f('critical', 'b')], notChecked: [], purls: [] }));
+    const r = await rescanRecord(first.value, t.deps);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.scanId).toBe(first.value.scanId);
+    expect(r.value.verdict.level).toBe('critical');
+    expect(r.value.scanSetHash).not.toBe(first.value.scanSetHash);
+    expect(r.value.scanSetHash).toBe(await hashScanSet(first.value.dir));
+    expect(t.registry.get(first.value.scanId)).toEqual(r.value);
+    expect(t.registry.list()).toHaveLength(1);
+    expect(t.panels.at(-1)).toEqual(r.value);
+  });
+  test('opens nothing and clones nothing', async () => {
+    const t = setup();
+    const first = await cloneAndScan(URL_, t.deps);
+    if (!first.ok) throw new Error('setup');
+    (t.deps.clone as ReturnType<typeof vi.fn>).mockClear();
+    await rescanRecord(first.value, t.deps);
+    expect(t.deps.clone).not.toHaveBeenCalled();
+  });
+  test('a registry failure is an error, not a stale verdict', async () => {
+    const t = setup();
+    const first = await cloneAndScan(URL_, t.deps);
+    if (!first.ok) throw new Error('setup');
+    t.deps.registry = { ...t.registry, get: () => undefined, add: async () => { throw new Error('disk full'); } };
+    const r = await rescanRecord(first.value, t.deps);
+    expect(r.ok).toBe(false);
+    expect(t.errors.at(-1)).toMatch(/Could not save/);
   });
 });

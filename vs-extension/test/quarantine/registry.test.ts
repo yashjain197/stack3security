@@ -77,3 +77,31 @@ describe('scanIdFor', () => {
     expect(scanIdFor('ab', 'c', 'd')).not.toBe(scanIdFor('a', 'bc', 'd'));
   });
 });
+
+describe('opened clones', () => {
+  test('markOpened records it, and openedDirs lists them', async () => {
+    const r = new Registry(store(), async () => undefined);
+    await r.add(rec({ scanId: 'a', dir: '/q/a' }));
+    await r.add(rec({ scanId: 'b', dir: '/q/b' }));
+    await r.markOpened('a', 123);
+    expect(r.get('a')?.openedAt).toBe(123);
+    expect([...r.openedDirs()]).toEqual(['/q/a']);
+  });
+  test('an opened clone is never pruned, however old', async () => {
+    const removed: string[] = [];
+    const r = new Registry(store(), async (d) => void removed.push(d));
+    await r.add(rec({ scanId: 'old', dir: '/q/old', createdAt: Date.now() - 30 * DAY }));
+    await r.markOpened('old');
+    await r.add(rec({ scanId: 'stale', dir: '/q/stale', createdAt: Date.now() - 30 * DAY }));
+    expect(await r.pruneOlderThan(7)).toEqual(['stale']);
+    expect(removed).toEqual(['/q/stale']);
+    expect(r.get('old')).toBeDefined();
+  });
+  test('a record with openedAt still validates after a reload', async () => {
+    const s = store();
+    const a = new Registry(s, async () => undefined);
+    await a.add(rec());
+    await a.markOpened('id1', 5);
+    expect(new Registry(s, async () => undefined).get('id1')?.openedAt).toBe(5);
+  });
+});

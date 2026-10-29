@@ -7,11 +7,16 @@ import { Registry, type ScanRecord } from '../quarantine/registry';
 import { removeQuarantined, sweepQuarantine } from '../quarantine/remove';
 import { runScan } from '../scan/scheduler';
 import { NOTICE } from '../ui/copy';
-import type { ActionHandlers } from '../ui/bridge';
 import { showVerdictPanel } from '../ui/panel';
 import { parseQuarantinePath, quarantineUriPath, readQuarantined, SCHEME } from '../ui/quarantineFs';
 import { buildReport } from '../ui/view';
-import { cloneAndScan, type CloneAndScanDeps } from './cloneAndScan';
+import { neutralize } from '../quarantine/neutralize';
+import { resolveQuarantineDir } from '../quarantine/remove';
+import { hashScanSet } from '../scan/hash';
+import { maybeOfferAutoTaskGuard } from '../guard/autoTasks';
+import { closePanel } from '../ui/panel';
+import { cloneAndScan, rescanRecord, type CloneAndScanDeps } from './cloneAndScan';
+import { createActionHandlers } from './actions';
 
 export const CLONE_AND_SCAN = 'stack3.cloneAndScan';
 
@@ -26,7 +31,7 @@ const KEEP_DAYS = 7;
 
 export function registerCommands(context: vscode.ExtensionContext): void {
   // Housekeeping at startup: clones older than a week are deleted (S8).
-  void sweepQuarantine(KEEP_DAYS).catch(() => undefined);
+  void sweepQuarantine(KEEP_DAYS, Date.now(), new Registry(context.globalState).openedDirs()).catch(() => undefined);
   void new Registry(context.globalState).pruneOlderThan(KEEP_DAYS).catch(() => undefined);
 
   // Read-only viewer for files of a quarantined clone: contained, <= 1 MiB, plain text, never a workspace.
@@ -40,8 +45,44 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     }),
   );
 
-  const notYet = async () => void vscode.window.showInformationMessage(`Stack3: ${NOTICE.notAvailableYet}`);
-  const handlers: ActionHandlers = {
+  // Settings are read when an action runs, and only their user-level values are used (I-10).
+  const scanDeps = (report?: (m: string) => void) => {
+    const settings = getSettings();
+    return {
+      settings,
+      client: createClient({
+        baseUrl: settings.apiUrl,
+        allowLocalhost: settings.allowLocalhost,
+        clientVersion: String((context.extension.packageJSON as { version?: string }).version ?? ''),
+      }),
+      scan: (dir: string) => runScan(dir, { mode: 'clone', checkedAt: new Date().toISOString() }, settings.limits),
+      report,
+    };
+  };
+
+  const handlers = createActionHandlers({
+    registry: new Registry(context.globalState),
+    hash: hashScanSet,
+    rescan: (rec) => {
+      const d = scanDeps();
+      return rescanRecord(rec, {
+        scan: d.scan,
+        client: d.client,
+        registry: new Registry(context.globalState),
+        showPanel: (r) => showVerdictPanel(context, r, handlers),
+        showError: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
+      });
+    },
+    checkDir: async (dir) => {
+      const real = await resolveQuarantineDir(dir);
+      if (real === undefined) throw new Error('missing');
+      return real;
+    },
+    neutralize,
+    openFolder: (dir) => vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), { forceNewWindow: true }),
+    removeDir: removeQuarantined,
+    closePanel,
+    offerAutoTaskGuard: () => maybeOfferAutoTaskGuard(context),
     viewFile: async (rec, file) => {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.from({ scheme: SCHEME, path: quarantineUriPath(rec.scanId, file) }));
       await vscode.languages.setTextDocumentLanguage(doc, 'plaintext');
@@ -51,11 +92,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
       await vscode.env.clipboard.writeText(buildReport(rec));
       void vscode.window.showInformationMessage(NOTICE.reportCopied);
     },
-    // Opening and deleting are implemented in the next step. Until then the buttons say so instead of doing nothing.
-    open: notYet,
-    openNeutralized: notYet,
-    delete: notYet,
-  };
+    info: (m) => void vscode.window.showInformationMessage(`Stack3: ${m}`),
+    error: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand(CLONE_AND_SCAN, async (arg?: unknown): Promise<CommandOutcome> => {
@@ -80,26 +119,20 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         return { ok: false, reason: checked.error };
       }
 
-      // Settings are read when the command runs, and only their user-level values are used (I-10).
-      const settings = getSettings();
-      const client = createClient({
-        baseUrl: settings.apiUrl,
-        allowLocalhost: settings.allowLocalhost,
-        clientVersion: String((context.extension.packageJSON as { version?: string }).version ?? ''),
-      });
       const registry = new Registry(context.globalState);
 
       return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Stack3', cancellable: false }, async (progress) => {
+        const d = scanDeps((m) => progress.report({ message: m }));
         const deps: CloneAndScanDeps = {
           makeDir: createQuarantineDir,
           clone: (u, dest) => cloneRepo(u, dest),
-          scan: (dir) => runScan(dir, { mode: 'clone', checkedAt: new Date().toISOString() }, settings.limits),
-          client,
+          scan: d.scan,
+          client: d.client,
           registry,
           removeDir: removeQuarantined,
           showPanel: (rec) => showVerdictPanel(context, rec, handlers),
           showError: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
-          report: (m) => progress.report({ message: m }),
+          report: d.report,
         };
         const r = await cloneAndScan(checked.url, deps);
         return r.ok ? { ok: true, level: r.value.verdict.level, scanId: r.value.scanId } : { ok: false, reason: r.reason };

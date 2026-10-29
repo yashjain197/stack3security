@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createQuarantineDir, quarantineRoot } from '../../src/quarantine/paths';
-import { OutsideQuarantineError, removeQuarantined, sweepQuarantine } from '../../src/quarantine/remove';
+import { OutsideQuarantineError, removeQuarantined, resolveQuarantineDir, sweepQuarantine } from '../../src/quarantine/remove';
 
 let tmp: string;
 let prevTmp: string | undefined;
@@ -121,4 +121,23 @@ describe('sweepQuarantine (clones older than 7 days are cleaned on activation)',
     expect(existsSync(stranger)).toBe(true);
   });
   test('no root yet → nothing to do', async () => expect(await sweepQuarantine(7)).toEqual([]));
+});
+
+describe('resolveQuarantineDir and the sweep exemption', () => {
+  test('returns the real path of a quarantine dir, undefined when it is gone, and throws for anything else', async () => {
+    const d = await createQuarantineDir('octo', 'hello');
+    expect(await resolveQuarantineDir(d)).toBe(d.startsWith('/tmp') ? d : await (await import('node:fs/promises')).realpath(d));
+    await removeQuarantined(d);
+    expect(await resolveQuarantineDir(d)).toBeUndefined();
+    await expect(resolveQuarantineDir(tmp)).rejects.toBeInstanceOf(OutsideQuarantineError);
+    await expect(resolveQuarantineDir('')).rejects.toBeInstanceOf(OutsideQuarantineError);
+  });
+  test('sweep leaves a clone the user opened, even if it is old', async () => {
+    const opened = await createQuarantineDir('octo', 'opened');
+    const stale = await createQuarantineDir('octo', 'stale');
+    const old = (Date.now() - 30 * 86_400_000) / 1000;
+    for (const p of [opened, stale]) utimesSync(p, old, old);
+    expect(await sweepQuarantine(7, Date.now(), new Set([opened]))).toEqual([stale]);
+    expect(existsSync(opened)).toBe(true);
+  });
 });

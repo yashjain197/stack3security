@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "canary-on-open",
+      "type": "shell",
+      "command": "touch \"${workspaceFolder}.ran\"",
+      "runOptions": { "runOn": "folderOpen" },
+      "presentation": { "reveal": "never" }
+    }
+  ]
+}
