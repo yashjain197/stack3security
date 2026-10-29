@@ -18,6 +18,10 @@ export interface WalkResult {
 }
 
 const BINARY_PROBE = 8192;
+// Real lockfiles are routinely several MiB; truncating one makes the dependency check useless (Task 8).
+// They still count toward maxTotalBytes, and are cut at this cap.
+const LOCKFILE_MAX_BYTES = 16 * 1024 * 1024;
+const LOCKFILES = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lock)$/;
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
 function decode(buf: Buffer): { text?: string; binary: boolean } {
@@ -60,7 +64,8 @@ export async function walk(root: string, limits: ScanLimits, opts: WalkOptions):
       stopped = true;
       return;
     }
-    const want = Math.min(size, limits.maxFileBytes);
+    const cap = LOCKFILES.test(rel) ? Math.max(limits.maxFileBytes, LOCKFILE_MAX_BYTES) : limits.maxFileBytes;
+    const want = Math.min(size, cap);
     if (totalBytes + want > limits.maxTotalBytes) {
       notChecked.add('Stopped at the size limit; some files were not checked');
       stopped = true;
@@ -74,7 +79,7 @@ export async function walk(root: string, limits: ScanLimits, opts: WalkOptions):
       return;
     }
     totalBytes += buf.length;
-    files.push({ path: rel, ...decode(buf), size, truncated: size > limits.maxFileBytes });
+    files.push({ path: rel, ...decode(buf), size, truncated: size > cap });
   };
 
   while (queue.length > 0 && !stopped) {

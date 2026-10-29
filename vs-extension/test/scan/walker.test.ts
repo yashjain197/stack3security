@@ -43,6 +43,36 @@ describe('walk', () => {
     expect(r.files[0]).toMatchObject({ text: 'x'.repeat(10), size: 100, truncated: true });
   });
 
+  test('lockfiles get a higher per-file cap (16 MiB); other files keep maxFileBytes', async () => {
+    const { root } = sandbox();
+    const twoMiB = 'x'.repeat(2 * 1024 * 1024);
+    put(root, 'package-lock.json', twoMiB);
+    put(root, 'sub/yarn.lock', twoMiB);
+    put(root, 'data.txt', twoMiB);
+    const r = await walk(root, DEFAULT_LIMITS, opts);
+    const by = Object.fromEntries(r.files.map((f) => [f.path, f]));
+    expect(by['package-lock.json']).toMatchObject({ size: twoMiB.length, truncated: false });
+    expect(by['sub/yarn.lock']).toMatchObject({ truncated: false });
+    expect(by['data.txt']).toMatchObject({ truncated: true });
+    expect(by['data.txt']?.text?.length).toBe(DEFAULT_LIMITS.maxFileBytes);
+  });
+
+  test('a lockfile past 16 MiB is still truncated and flagged', async () => {
+    const { root } = sandbox();
+    put(root, 'pnpm-lock.yaml', Buffer.alloc(17 * 1024 * 1024, 97));
+    const r = await walk(root, DEFAULT_LIMITS, opts);
+    expect(r.files[0]).toMatchObject({ path: 'pnpm-lock.yaml', truncated: true });
+    expect(r.files[0]?.text?.length).toBe(16 * 1024 * 1024);
+  });
+
+  test('lockfile bytes still count toward maxTotalBytes', async () => {
+    const { root } = sandbox();
+    put(root, 'package-lock.json', 'x'.repeat(2 * 1024 * 1024));
+    put(root, 'b.txt', 'y');
+    const r = await walk(root, { ...DEFAULT_LIMITS, maxTotalBytes: 1024 * 1024 }, opts);
+    expect(r.notChecked.join()).toContain('size limit');
+  });
+
   test('maxFiles exceeded → notChecked contains "file limit"', async () => {
     const { root } = sandbox();
     for (let i = 0; i < 5; i++) put(root, `f${i}.txt`, 'a');
