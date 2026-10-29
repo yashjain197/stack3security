@@ -1,4 +1,5 @@
 import type { Finding, Rule, ScanContext, Severity, VirtualFile } from '../types';
+import { findIndicatorsInText } from '../indicators';
 import { finding } from './evidence';
 import { GENERATED } from './paths';
 import { SOURCE_REGEXES as RE } from './regexes';
@@ -76,7 +77,14 @@ function sourceRule(file: VirtualFile, ctx: ScanContext): Finding[] {
   const c = classify(signals);
   if (!c) return [];
   const first = Math.min(...[...signals.values()].map((h) => h.line));
-  return [finding(ctx, c.ruleId, c.severity, c.title, `Signals: ${[...signals.keys()].join(', ')}`, file.path, first)];
+  let evidence = `Signals: ${[...signals.keys()].join(', ')}`;
+  if (c.severity !== 'caution') {
+    // Wallets and endpoints named in a file that already combines risky behaviours: the report to the graph reads them from here.
+    const found = findIndicatorsInText(file.text);
+    if (found.addresses.length) evidence += `; wallets: ${found.addresses.slice(0, 3).join(' ')}`;
+    if (found.endpoints.length) evidence += `; endpoints: ${found.endpoints.slice(0, 2).join(' ')}`;
+  }
+  return [finding(ctx, c.ruleId, c.severity, c.title, evidence, file.path, first)];
 }
 
 export const sourceRules: Rule[] = [(files, ctx) => files.flatMap((f) => sourceRule(f, ctx))];

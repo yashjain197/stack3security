@@ -1,7 +1,8 @@
 import type { Result, Stack3Client } from '../api/client';
 import { buildVerdict } from '../api/merge';
+import { extractIndicators } from '../engine/indicators';
 import { ENGINE_VERSION } from '../engine/version';
-import type { EngineResult, Indicators } from '../engine/types';
+import type { EngineResult } from '../engine/types';
 import { validateRepoUrl } from '../quarantine/paths';
 import { scanIdFor, type Registry, type ScanRecord } from '../quarantine/registry';
 import { hashScanSet } from '../scan/hash';
@@ -19,8 +20,7 @@ export interface CloneAndScanDeps {
   now?(): number;
 }
 
-// Task 17 replaces this with indicators extracted from flagged findings.
-const NO_INDICATORS: Indicators = { addresses: [], domains: [] };
+const indicatorsOf = (local: EngineResult, remote: Result<EngineResult['findings']>) => extractIndicators([...local.findings, ...(remote.ok ? remote.value : [])]);
 
 /**
  * The main flow (blueprint 4.1): validate, clone into quarantine, scan in the worker, check packages, merge,
@@ -59,7 +59,7 @@ export async function cloneAndScan(input: string, deps: CloneAndScanDeps): Promi
   report('Checking packages…');
   const remote = await deps.client.scanPackage(local.purls);
 
-  const verdict = buildVerdict(local, remote, { type: 'repo', id: `github.com/${target.owner}/${target.repo}@${sha.slice(0, 7)}` }, NO_INDICATORS);
+  const verdict = buildVerdict(local, remote, { type: 'repo', id: `github.com/${target.owner}/${target.repo}@${sha.slice(0, 7)}` }, indicatorsOf(local, remote));
 
   let record: ScanRecord;
   try {
@@ -101,7 +101,7 @@ export async function rescanRecord(rec: ScanRecord, deps: RescanDeps): Promise<R
   const local = await deps.scan(rec.dir);
   report('Checking packages…');
   const remote = await deps.client.scanPackage(local.purls);
-  const verdict = buildVerdict(local, remote, rec.verdict.target, NO_INDICATORS);
+  const verdict = buildVerdict(local, remote, rec.verdict.target, indicatorsOf(local, remote));
   let next: ScanRecord;
   try {
     next = { ...rec, verdict, scanSetHash: await hashScanSet(rec.dir), createdAt: (deps.now ?? Date.now)() };
