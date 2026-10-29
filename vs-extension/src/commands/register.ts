@@ -10,6 +10,14 @@ import { runScan } from '../scan/scheduler';
 import { cloneAndScan, type CloneAndScanDeps } from './cloneAndScan';
 
 export const CLONE_AND_SCAN = 'stack3.cloneAndScan';
+
+/** What the command returns to whoever ran it (`executeCommand`): an outcome only, never paths or findings. */
+export interface CommandOutcome {
+  ok: boolean;
+  reason?: string;
+  level?: string;
+  scanId?: string;
+}
 const KEEP_DAYS = 7;
 
 /**
@@ -48,7 +56,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   void new Registry(context.globalState).pruneOlderThan(KEEP_DAYS).catch(() => undefined);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(CLONE_AND_SCAN, async (arg?: unknown) => {
+    vscode.commands.registerCommand(CLONE_AND_SCAN, async (arg?: unknown): Promise<CommandOutcome> => {
       const url =
         typeof arg === 'string'
           ? arg
@@ -62,12 +70,12 @@ export function registerCommands(context: vscode.ExtensionContext): void {
                 return 'error' in r ? r.error : undefined;
               },
             });
-      if (url === undefined) return; // cancelled
+      if (url === undefined) return { ok: false, reason: 'Cancelled' };
 
       const checked = validateRepoUrl(url);
       if ('error' in checked) {
         void vscode.window.showErrorMessage(`Stack3: ${checked.error}`);
-        return;
+        return { ok: false, reason: checked.error };
       }
 
       // Settings are read when the command runs, and only their user-level values are used (I-10).
@@ -79,7 +87,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
       });
       const registry = new Registry(context.globalState);
 
-      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Stack3', cancellable: false }, async (progress) => {
+      return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Stack3', cancellable: false }, async (progress) => {
         const deps: CloneAndScanDeps = {
           makeDir: createQuarantineDir,
           clone: (u, dest) => cloneRepo(u, dest),
@@ -91,7 +99,8 @@ export function registerCommands(context: vscode.ExtensionContext): void {
           showError: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
           report: (m) => progress.report({ message: m }),
         };
-        await cloneAndScan(checked.url, deps);
+        const r = await cloneAndScan(checked.url, deps);
+        return r.ok ? { ok: true, level: r.value.verdict.level, scanId: r.value.scanId } : { ok: false, reason: r.reason };
       });
     }),
   );

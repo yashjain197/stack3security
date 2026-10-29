@@ -1,0 +1,13 @@
+{
+  // Press F5 with the vs-extension folder open. Run `npm run build` first (and again after changes).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Stack3 extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--disable-extensions"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"]
+    }
+  ]
+}

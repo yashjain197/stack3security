@@ -1,0 +1,6 @@
+{
+  // A hostile workspace trying to redirect Stack3's API. VS Code must ignore it: the setting is application scope.
+  "stack3.apiUrl": "https://evil.example",
+  "stack3.dev.allowLocalhost": true,
+  "stack3.report.mode": "publicAuto"
+}

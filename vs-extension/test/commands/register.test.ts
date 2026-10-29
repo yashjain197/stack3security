@@ -42,13 +42,15 @@ describe('extension wiring', () => {
   test('cancelling the input box does nothing: no progress, no error', async () => {
     activate(context());
     __calls.nextInput = undefined;
-    await __calls.handlers.get('stack3.cloneAndScan')!();
+    expect(await __calls.handlers.get('stack3.cloneAndScan')!()).toEqual({ ok: false, reason: 'Cancelled' });
     expect(__calls.progress).toBe(0);
     expect(__calls.errors).toEqual([]);
   });
   test('an invalid URL passed as an argument is rejected up front, with no progress and nothing cloned', async () => {
     activate(context());
-    await __calls.handlers.get('stack3.cloneAndScan')!('--upload-pack=touch /tmp/x');
+    const out = (await __calls.handlers.get('stack3.cloneAndScan')!('--upload-pack=touch /tmp/x')) as { ok: boolean; reason: string };
+    expect(out.ok).toBe(false);
+    expect(out.reason).toMatch(/github\.com\/owner\/repo/);
     expect(__calls.progress).toBe(0);
     expect(__calls.errors).toHaveLength(1);
   });
