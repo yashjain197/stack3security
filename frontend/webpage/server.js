@@ -15,6 +15,15 @@ const contentTypes = {
 
 createServer(async (request, response) => {
   const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+  if (pathname === "/config.json") {
+    response.writeHead(200, {
+      "Content-Type": contentTypes[".json"],
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    response.end(JSON.stringify({ apiBaseUrl: process.env.API_BASE_URL ?? "http://localhost:8000" }));
+    return;
+  }
   let decodedPathname;
   try {
     decodedPathname = decodeURIComponent(pathname);
@@ -38,13 +47,18 @@ createServer(async (request, response) => {
     response.writeHead(200, {
       "Content-Type": contentTypes[extname(file)] ?? "application/octet-stream",
       "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
     });
     response.end(body);
   } catch (error) {
     if (error.code === "ENOENT" && !extname(pathname)) {
       try {
         const body = await readFile(resolve(root, "index.html"));
-        response.writeHead(200, { "Content-Type": contentTypes[".html"] });
+        response.writeHead(200, {
+          "Content-Type": contentTypes[".html"],
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "no-referrer",
+        });
         response.end(body);
         return;
       } catch (fallbackError) {

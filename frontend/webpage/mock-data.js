@@ -1,5 +1,5 @@
 export const demoNotice =
-  "You're viewing illustrative demo data. Live scanning and account features will appear when the backend is connected.";
+  "You're viewing illustrative scan data. Live scanning is not connected. Account, billing and team features use the API.";
 
 export const websiteScan = {
   level: "critical",
