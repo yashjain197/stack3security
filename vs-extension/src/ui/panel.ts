@@ -44,7 +44,10 @@ export interface PanelHooks {
   confirm?(title: string, detail: string, okLabel: string): Promise<boolean>;
 }
 
-const panels = new Map<string, { panel: vscode.WebviewPanel; rec: ScanRecord }>();
+/** Host → webview: the AI explanation, shown as plain text beside the verdict. Never part of the verdict. */
+export type ExplanationMessage = { state: 'pending' } | { state: 'ready'; explanation: string; fix: string } | { state: 'unavailable'; reason: string };
+
+const panels = new Map<string, { panel: vscode.WebviewPanel; rec: ScanRecord; explanation?: ExplanationMessage }>();
 
 const modalConfirm = async (title: string, detail: string, okLabel: string): Promise<boolean> =>
   (await vscode.window.showWarningMessage(title, { modal: true, detail }, okLabel)) === okLabel;
@@ -79,7 +82,11 @@ export function showVerdictPanel(ctx: vscode.ExtensionContext, rec: ScanRecord, 
       const current = registry.get(rec.scanId);
       return current !== undefined && current.sha === rec.sha && current.scanSetHash === rec.scanSetHash;
     },
-    onReady: () => void panel.webview.postMessage({ type: 'verdict', scanId: rec.scanId, view }),
+    onReady: () => {
+      void panel.webview.postMessage({ type: 'verdict', scanId: rec.scanId, view });
+      const last = panels.get(rec.scanId)?.explanation; // a reloaded page gets the explanation again
+      if (last) void panel.webview.postMessage({ type: 'explanation', scanId: rec.scanId, ...last });
+    },
     onRendered: hooks.onRendered,
   });
 
@@ -90,6 +97,14 @@ export function showVerdictPanel(ctx: vscode.ExtensionContext, rec: ScanRecord, 
   panel.onDidDispose(() => {
     if (panels.get(rec.scanId)?.panel === panel) panels.delete(rec.scanId);
   });
+}
+
+/** Show an explanation in the open panel for a scan (and remember it for a reload). Ignored if no such panel is open. */
+export function postExplanation(scanId: string, msg: ExplanationMessage): void {
+  const entry = panels.get(scanId);
+  if (!entry) return;
+  entry.explanation = msg;
+  void entry.panel.webview.postMessage({ type: 'explanation', scanId, ...msg });
 }
 
 /** Close the panel for a scan (after its clone was deleted). */

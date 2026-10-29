@@ -11,7 +11,7 @@ import { createQuarantineDir } from '../../../src/quarantine/paths';
 import { Registry } from '../../../src/quarantine/registry';
 import { removeQuarantined, resolveQuarantineDir } from '../../../src/quarantine/remove';
 import { hashScanSet } from '../../../src/scan/hash';
-import { showVerdictPanel } from '../../../src/ui/panel';
+import { postExplanation, showVerdictPanel } from '../../../src/ui/panel';
 import type { RenderedStats } from '../../../src/ui/bridge';
 import type { ScanRecord } from '../../../src/quarantine/registry';
 
@@ -114,7 +114,17 @@ export function activate(ctx: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('stack3test.showHostile', (webviewRoot: string) =>
       new Promise<RenderedStats | { timeout: true }>((resolve) => {
         const noop = async () => undefined;
-        showVerdictPanel(ctx, hostileRecord(), { open: noop, openNeutralized: noop, delete: noop, viewFile: noop, copyReport: noop }, { webviewRoot: vscode.Uri.file(webviewRoot), onRendered: resolve });
+        const rec = hostileRecord();
+        let renders = 0;
+        showVerdictPanel(ctx, rec, { open: noop, openNeutralized: noop, delete: noop, viewFile: noop, copyReport: noop }, {
+          webviewRoot: vscode.Uri.file(webviewRoot),
+          // First render: the verdict. Then a hostile AI explanation (a model repeating attacker text) is sent, and the
+          // second render, which includes it, is what is reported.
+          onRendered: (stats) => {
+            if (++renders === 1) postExplanation(rec.scanId, { state: 'ready', explanation: PAYLOADS.join('\n'), fix: PAYLOADS[1]! });
+            else resolve(stats);
+          },
+        });
         setTimeout(() => resolve({ timeout: true }), 25_000);
       }),
     ),

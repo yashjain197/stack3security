@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import type * as vscode from 'vscode';
-import { closePanel, renderHtml, showVerdictPanel, __resetPanels } from '../../src/ui/panel';
+import { closePanel, postExplanation, renderHtml, showVerdictPanel, __resetPanels } from '../../src/ui/panel';
 import { buildView } from '../../src/ui/view';
 import { __calls, __docs, __panels, __reset } from '../mocks/vscode';
 import { called, makeHandlers, makeRec, SCAN_ID } from './helpers';
@@ -174,6 +174,61 @@ describe('showVerdictPanel', () => {
     p0().receive({ type: 'action', scanId: SCAN_ID, action: 'open' });
     await new Promise((r) => setTimeout(r, 5));
     expect(h.open).not.toHaveBeenCalled();
+  });
+});
+
+describe('postExplanation', () => {
+  const ready = { state: 'ready', explanation: 'It runs a script.', fix: 'Delete it.' } as const;
+  test('sends the explanation to the open panel for that scan, as its own message type', () => {
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('critical'), handlers);
+    postExplanation(SCAN_ID, { state: 'pending' });
+    postExplanation(SCAN_ID, ready);
+    expect(__panels[0]!.posted).toEqual([
+      { type: 'explanation', scanId: SCAN_ID, state: 'pending' },
+      { type: 'explanation', scanId: SCAN_ID, ...ready },
+    ]);
+  });
+  test('it is separate from the verdict message: the view model never carries it', () => {
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('critical'), handlers);
+    postExplanation(SCAN_ID, ready);
+    __panels[0]!.receive({ type: 'ready' });
+    const verdictMsg = __panels[0]!.posted.find((m) => (m as { type: string }).type === 'verdict') as { view: Record<string, unknown> };
+    expect(verdictMsg.view).not.toHaveProperty('explanation');
+    expect(JSON.stringify(verdictMsg)).not.toContain('It runs a script.');
+  });
+  test('a page that loads after the explanation arrived still gets it, right after the verdict', async () => {
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('critical'), handlers);
+    postExplanation(SCAN_ID, ready);
+    __panels[0]!.posted.length = 0;
+    __panels[0]!.receive({ type: 'ready' });
+    await Promise.resolve();
+    expect(__panels[0]!.posted.map((m) => (m as { type: string }).type)).toEqual(['verdict', 'explanation']);
+  });
+  test('the latest state wins on a reload', async () => {
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('critical'), handlers);
+    postExplanation(SCAN_ID, { state: 'pending' });
+    postExplanation(SCAN_ID, { state: 'unavailable', reason: 'Ollama is not running.' });
+    __panels[0]!.posted.length = 0;
+    __panels[0]!.receive({ type: 'ready' });
+    await Promise.resolve();
+    expect(__panels[0]!.posted[1]).toMatchObject({ state: 'unavailable', reason: 'Ollama is not running.' });
+  });
+  test('an explanation for a scan with no open panel is ignored', () => {
+    expect(() => postExplanation('cd'.repeat(32), ready)).not.toThrow();
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('critical'), handlers);
+    postExplanation('cd'.repeat(32), ready);
+    expect(__panels[0]!.posted).toEqual([]);
+  });
+  test('after the panel is closed it is ignored', () => {
+    const { handlers } = makeHandlers();
+    showVerdictPanel(ctx(), makeRec('critical'), handlers);
+    __panels[0]!.dispose();
+    expect(() => postExplanation(SCAN_ID, ready)).not.toThrow();
   });
 });
 

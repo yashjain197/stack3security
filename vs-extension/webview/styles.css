@@ -27,3 +27,6 @@ h2 { font-size: 1rem; margin: 18px 0 6px; }
 .sev { text-transform: uppercase; font-size: 0.72rem; font-weight: 700; margin-right: 8px; opacity: 0.85; }
 .evidence { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; font-family: var(--vscode-editor-font-family); font-size: 0.9em; }
 .prose { white-space: pre-wrap; }
+
+.explanation { border-top: 1px solid var(--vscode-panel-border, #8884); margin-top: 18px; }
+.label { font-size: 0.85rem; opacity: 0.85; border-left: 3px solid var(--sev-unknown); padding-left: 8px; margin: 4px 0 10px; }

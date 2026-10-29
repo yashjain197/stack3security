@@ -50,7 +50,7 @@ export function validateBaseUrl(baseUrl: string, allowLocalhost: boolean): { ok:
   return { ok: false, reason: 'API URL must use HTTPS' };
 }
 
-type Attempt = { ok: true; value: unknown } | { ok: false; reason: string; retry: boolean };
+export type Attempt = { ok: true; value: unknown } | { ok: false; reason: string; retry: boolean };
 
 /** Read at most MAX_BODY bytes. The stream is cancelled the moment the cap is passed or the request is aborted. */
 async function readCapped(res: Response, signal: AbortSignal): Promise<Uint8Array | 'too-large'> {
@@ -81,13 +81,14 @@ async function readCapped(res: Response, signal: AbortSignal): Promise<Uint8Arra
   return out;
 }
 
-async function once(fetchImpl: typeof fetch, url: string, body: unknown, version: string, timeoutMs: number): Promise<Attempt> {
+/** One JSON POST with a timeout, a 1 MiB streamed response cap, no redirects and no credentials. Shared by every provider. */
+export async function postJsonOnce(fetchImpl: typeof fetch, url: string, body: unknown, headers: Record<string, string>, timeoutMs: number): Promise<Attempt> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json', 'x-stack3-client': `vscode/${version}` },
+      headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
       body: JSON.stringify(body),
       signal: ctl.signal,
       redirect: 'error', // a redirect could carry the request to another origin (I-16)
@@ -133,7 +134,7 @@ export function createClient(opts: ClientOptions): Stack3Client {
     const url = `${target.url.origin}${target.url.pathname.replace(/\/+$/, '')}${path}`;
     let last: Attempt;
     for (let attempt = 0; ; attempt++) {
-      last = await once(fetchImpl, url, body, version, timeoutMs);
+      last = await postJsonOnce(fetchImpl, url, body, { 'x-stack3-client': `vscode/${version}` }, timeoutMs);
       if (last.ok || !last.retry || attempt === 1) break; // one retry, only for timeouts, network errors and 5xx
     }
     return last.ok ? last : { ok: false, reason: last.reason };

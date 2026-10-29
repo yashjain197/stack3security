@@ -27,6 +27,7 @@ async function run() {
       record('no link (<a href>) exists in the page', stats.anchors === 0, `anchors=${stats.anchors}`);
       record('no payload executed (window.__stack3_xss never set)', stats.injected === false);
       for (const p of PAYLOADS) record(`shown as literal text: ${p.slice(0, 48)}`, stats.text.includes(p));
+      record('the AI explanation (also hostile) is drawn as text, under its fixed label', /AI explanation: may be wrong\. The verdict above is decided by rules\./.test(stats.text) && /What to do:/.test(stats.text) && stats.text.split('<img src=x onerror=alert(1)>').length - 1 >= 2, `occurrences of the first payload: ${stats.text.split('<img src=x onerror=alert(1)>').length - 1}`);
       record('the verdict itself rendered', /critical risk/i.test(stats.text) && /Do not open this folder/.test(stats.text), stats.text.slice(0, 80).replace(/\n/g, ' | '));
       record('buttons for a critical verdict: delete and open-with-auto-run-disabled, no plain Open', /Delete clone/.test(stats.text) && /Open with auto-run disabled/.test(stats.text) && !/Open anyway/.test(stats.text) && !/(^|\n)Open(\n|$)/.test(stats.text));
     }

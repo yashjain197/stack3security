@@ -13,8 +13,14 @@ export interface Stack3Settings {
   allowLocalhost: boolean;
   explainMode: 'publicOnly' | 'always' | 'never';
   reportMode: 'publicAuto' | 'ask' | 'never';
+  /** Where the plain-English explanation comes from. `ollama` runs on this computer; `api` is the Stack3 server. */
+  explainProvider: 'ollama' | 'api';
+  ollamaModel: string;
   limits: ScanLimits;
 }
+
+export const DEFAULT_OLLAMA_MODEL = 'qwen2.5-coder:7b';
+const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
 
 export const DEFAULT_LIMITS: Readonly<ScanLimits> = Object.freeze({
   maxFiles: 20000,
@@ -54,6 +60,8 @@ export function getSettings(): Stack3Settings {
     allowLocalhost: userValue<unknown>(cfg, 'dev.allowLocalhost', false) === true,
     explainMode: oneOf(userValue<unknown>(cfg, 'explain.sendSnippets', 'publicOnly'), ['publicOnly', 'always', 'never'], 'publicOnly'),
     reportMode: oneOf(userValue<unknown>(cfg, 'report.mode', 'publicAuto'), ['publicAuto', 'ask', 'never'], 'publicAuto'),
+    explainProvider: oneOf(userValue<unknown>(cfg, 'explain.provider', 'ollama'), ['ollama', 'api'], 'ollama'),
+    ollamaModel: ((m) => (typeof m === 'string' && MODEL_NAME.test(m) ? m : DEFAULT_OLLAMA_MODEL))(userValue<unknown>(cfg, 'explain.ollamaModel', DEFAULT_OLLAMA_MODEL)),
     limits: sanitizeLimits(userValue<unknown>(cfg, 'scan.limits', DEFAULT_LIMITS)),
   };
 }

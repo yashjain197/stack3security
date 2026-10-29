@@ -57,3 +57,10 @@ export const NOTICE = {
   fileTruncated: '[Stack3: file truncated at 1 MiB]',
   binary: (bytes: number) => `[Stack3: binary file, ${bytes} bytes, not shown]`,
 } as const;
+
+export const EXPLAIN = {
+  label: 'AI explanation: may be wrong. The verdict above is decided by rules.',
+  pending: 'Generating a plain-language explanation…',
+  unavailable: (reason: string) => `Explanation unavailable: ${reason}`,
+  fixLead: 'What to do:',
+} as const;

@@ -7,7 +7,10 @@ import { Registry, type ScanRecord } from '../quarantine/registry';
 import { removeQuarantined, sweepQuarantine } from '../quarantine/remove';
 import { runScan } from '../scan/scheduler';
 import { NOTICE } from '../ui/copy';
-import { showVerdictPanel } from '../ui/panel';
+import { postExplanation, showVerdictPanel } from '../ui/panel';
+import { apiProvider } from '../ai/provider';
+import { createOllamaProvider } from '../ai/ollama';
+import { explainRecord } from '../ai/explain';
 import { parseQuarantinePath, quarantineUriPath, readQuarantined, SCHEME } from '../ui/quarantineFs';
 import { buildReport } from '../ui/view';
 import { neutralize } from '../quarantine/neutralize';
@@ -64,6 +67,20 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     };
   };
 
+  // Show the verdict, then (in the background) ask the chosen provider for a plain-English explanation. The explanation
+  // arrives later, is shown beside the verdict, and cannot change it.
+  const showAndExplain = (rec: ScanRecord): void => {
+    showVerdictPanel(context, rec, handlers);
+    void explainRecord(rec, {
+      settings: getSettings,
+      providers: {
+        ollama: (model) => createOllamaProvider({ model }),
+        api: () => apiProvider(scanDeps().client),
+      },
+      post: postExplanation,
+    }).catch(() => undefined);
+  };
+
   const handlers = createActionHandlers({
     registry: new Registry(context.globalState),
     hash: hashScanSet,
@@ -73,7 +90,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
         scan: d.scan,
         client: d.client,
         registry: new Registry(context.globalState),
-        showPanel: (r) => showVerdictPanel(context, r, handlers),
+        showPanel: (r) => showAndExplain(r),
         showError: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
       });
     },
@@ -134,7 +151,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
           client: d.client,
           registry,
           removeDir: removeQuarantined,
-          showPanel: (rec) => showVerdictPanel(context, rec, handlers),
+          showPanel: (rec) => showAndExplain(rec),
           showError: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
           report: d.report,
         };

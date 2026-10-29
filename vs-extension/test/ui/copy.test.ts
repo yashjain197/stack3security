@@ -55,6 +55,21 @@ describe('styles: nothing is green (I-15)', () => {
   });
 });
 
+describe('the AI explanation label', () => {
+  test('is the fixed wording from the plan, and the webview shows exactly that', () => {
+    expect(copy.EXPLAIN.label).toBe('AI explanation: may be wrong. The verdict above is decided by rules.');
+    const src = readFileSync(join(root, 'webview/main.ts'), 'utf8');
+    expect(src).toContain(copy.EXPLAIN.label);
+    expect(src).toContain(copy.EXPLAIN.pending);
+    expect(src).toContain(copy.EXPLAIN.fixLead);
+  });
+  test('the webview draws model text with textContent only (it goes through el(), never innerHTML)', () => {
+    const src = readFileSync(join(root, 'webview/main.ts'), 'utf8');
+    expect(src).toMatch(/el\('p', 'prose', m\.explanation\)/);
+    expect(src).toMatch(/el\('p', 'prose', `What to do: \$\{m\.fix\}`\)/);
+  });
+});
+
 describe('the webview page script', () => {
   const src = readFileSync(join(root, 'webview/main.ts'), 'utf8');
   test('builds text with textContent only: no innerHTML, outerHTML, insertAdjacentHTML, document.write, eval or Function', () => {
