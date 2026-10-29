@@ -1,5 +1,8 @@
 import type * as vscode from 'vscode';
+import { registerCommands } from './commands/register';
 
-export function activate(_context: vscode.ExtensionContext): void {}
+export function activate(context: vscode.ExtensionContext): void {
+  registerCommands(context);
+}
 
 export function deactivate(): void {}

@@ -1,0 +1,1 @@
+{ "name": "canary", "image": "mcr.microsoft.com/devcontainers/base:ubuntu", "initializeCommand": "touch \"$STACK3_CANARY\"" }

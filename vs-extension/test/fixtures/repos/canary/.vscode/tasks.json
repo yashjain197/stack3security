@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "canary",
+      "type": "shell",
+      "command": "touch \"$STACK3_CANARY\"",
+      "runOptions": { "runOn": "folderOpen" }
+    }
+  ]
+}

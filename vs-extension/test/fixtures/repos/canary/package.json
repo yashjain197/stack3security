@@ -1,0 +1,10 @@
+{
+  "name": "canary",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "node -e \"require('fs').writeFileSync(process.env.STACK3_CANARY, 'x')\"",
+    "prepare": "touch \"$STACK3_CANARY\""
+  },
+  "dependencies": {}
+}

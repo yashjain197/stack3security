@@ -30,7 +30,12 @@
     }
   },
   "contributes": {
-    "commands": [],
+    "commands": [
+      {
+        "command": "stack3.cloneAndScan",
+        "title": "Stack3: Clone and scan safely"
+      }
+    ],
     "configuration": {
       "title": "Stack3",
       "properties": {
