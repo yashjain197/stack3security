@@ -16,12 +16,20 @@ const RANK: Record<Severity, number> = { critical: 2, high: 1, caution: 0 };
  * then length is capped, so a key cannot survive by straddling the cut.
  */
 export function redact(f: Finding): SafeFinding {
+  // Copy known fields only: a forged object with extra properties must not carry them to the wire.
   const out: Finding = {
-    ...f,
+    ruleId: clip(f.ruleId, 200),
+    layer: f.layer,
+    severity: f.severity,
     title: clip(redactSecrets(f.title), MAX_TITLE),
     evidence: clip(redactSecrets(f.evidence), MAX_EVIDENCE),
+    source: f.source,
+    checkedAt: clip(f.checkedAt, 64),
   };
-  if (f.location) out.location = { ...f.location, file: clip(redactSecrets(f.location.file), 500) };
+  if (f.location) {
+    out.location = { file: clip(redactSecrets(f.location.file), 500) };
+    if (f.location.line !== undefined) out.location.line = f.location.line;
+  }
   return out as SafeFinding;
 }
 

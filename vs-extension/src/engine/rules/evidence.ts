@@ -31,3 +31,8 @@ export function finding(
     checkedAt: ctx.checkedAt,
   };
 }
+
+/** Prose from an untrusted source: control and bidi characters removed, newlines kept, length capped. */
+export function cleanText(text: string, max: number): string {
+  return text.replace(UNSAFE_CHARS, '').slice(0, max);
+}
