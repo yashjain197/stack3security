@@ -35,4 +35,6 @@ export default tseslint.config(
     },
   },
   { files: ['src/quarantine/git.ts'], rules: { 'no-restricted-imports': 'off' } },
+  // The one test that runs real git against a fixture remote. Tests are not shipped.
+  { files: ['test/quarantine/git.test.ts'], rules: { 'no-restricted-imports': 'off' } },
 );
