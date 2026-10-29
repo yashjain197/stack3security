@@ -22,6 +22,7 @@ function setup(over: Partial<WatcherDeps> & { local?: () => EngineResult | Promi
   const published: { root: RootInfo; verdict: Verdict }[] = [];
   const cleared: string[] = [];
   const notes: string[] = [];
+  const noteRoots: RootInfo[] = [];
   const handlers: ((p: string) => void)[] = [];
   const disposed: string[] = [];
   const calls: string[][] = [];
@@ -36,7 +37,7 @@ function setup(over: Partial<WatcherDeps> & { local?: () => EngineResult | Promi
     client: () => ({ scanPackage: async (p: string[]) => (calls.push(p), over.remote ? over.remote(p) : { ok: true as const, value: [] }) }),
     publish: (root, verdict) => void published.push({ root, verdict }),
     clear: (root) => void cleared.push(root.path),
-    notify: (m) => void notes.push(m),
+    notify: (m, root) => void (notes.push(m), noteRoots.push(root)),
     watch: (_r, _g, onEvent) => (handlers.push(onEvent), { dispose: () => void disposed.push('watch') }),
     onRootsChanged: (cb) => ((rootsCb = cb), { dispose: () => void disposed.push('roots') }),
     isTrusted: () => trusted,
@@ -47,7 +48,7 @@ function setup(over: Partial<WatcherDeps> & { local?: () => EngineResult | Promi
   delete (deps as Partial<typeof over>).remote;
   const d = registerWatchers({ subscriptions: [] }, deps);
   return {
-    d, scan, published, cleared, notes, handlers, disposed, calls,
+    d, scan, published, cleared, notes, noteRoots, handlers, disposed, calls,
     setLocal: (fn: typeof local) => void (local = fn),
     setRoots: (r: RootInfo[]) => { roots = r; rootsCb(); },
     setTrusted: (t: boolean) => { trusted = t; if (t) trustCb(); },
@@ -187,6 +188,11 @@ describe('notifications', () => {
     t.event();
     await t.flush(600);
     expect(t.notes).toHaveLength(1);
+  });
+  test('the notice carries the folder it is about, so a folder already warned about can be skipped', async () => {
+    const t = setup({ local: () => empty({ findings: [f('critical', 'tasks.folder-open')] }) });
+    await t.flush(600);
+    expect(t.noteRoots).toEqual([ROOT]);
   });
   test('caution findings and an unchanged state are silent', async () => {
     const t = setup({ local: () => empty({ findings: [f('caution')] }) });

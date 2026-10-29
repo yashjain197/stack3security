@@ -33,6 +33,7 @@ export const workspace = {
 // ---- window / commands (Task 12 wiring) ----
 export const __calls = {
   registered: [] as string[],
+  executed: [] as { id: string; args: unknown[] }[],
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   errors: [] as string[],
   warnings: [] as string[],
@@ -48,6 +49,7 @@ export function __reset(): void {
   __panels.length = 0;
   __docs.opened = []; __docs.shown = 0; __docs.language = []; __docs.clipboard = ''; __docs.warningAnswer = undefined; __docs.infoAnswer = undefined; __docs.lastInfo = undefined; __docs.infoCalls = []; __docs.lastWarning = undefined; __docs.providers.clear();
   __calls.registered = [];
+  __calls.executed = [];
   __calls.handlers = new Map();
   __calls.errors = [];
   __calls.warnings = [];
@@ -60,6 +62,7 @@ export function __reset(): void {
 export const ProgressLocation = { Notification: 15 } as const;
 
 export const commands = {
+  executeCommand: async (id: string, ...args: unknown[]) => void __calls.executed.push({ id, args }),
   registerCommand(id: string, handler: (...args: unknown[]) => unknown) {
     __calls.registered.push(id);
     __calls.handlers.set(id, handler);

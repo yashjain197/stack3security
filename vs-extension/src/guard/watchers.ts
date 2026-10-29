@@ -28,7 +28,8 @@ export interface WatcherDeps {
   client(): Pick<Stack3Client, 'scanPackage'>;
   publish(root: RootInfo, verdict: Verdict): void;
   clear(root: RootInfo): void;
-  notify(message: string): void;
+  /** The root is passed so the caller can stay quiet about a folder it has just warned about. */
+  notify(message: string, root: RootInfo): void;
   watch(root: RootInfo, glob: string, onEvent: (fsPath: string) => void): Watch;
   onRootsChanged(cb: () => void): Watch;
   isTrusted(): boolean;
@@ -117,7 +118,7 @@ export function registerWatchers(_ctx: Pick<vscode.ExtensionContext, 'subscripti
     if (serious.length > 0) {
       const top = serious.find((f) => f.severity === 'critical') ?? serious[0]!;
       const where = top.location ? ` (${clip(top.location.file, 80)}${top.location.line ? `:${top.location.line}` : ''})` : '';
-      deps.notify(`Stack3: ${serious.length} new serious problem${serious.length === 1 ? '' : 's'} in ${clip(root.name, 60)}. ${clip(top.title, 120)}${where}. See the Problems panel.`);
+      deps.notify(`Stack3: ${serious.length} new serious problem${serious.length === 1 ? '' : 's'} in ${clip(root.name, 60)}. ${clip(top.title, 120)}${where}. See the Problems panel.`, root);
     }
   }
 

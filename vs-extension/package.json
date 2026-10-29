@@ -14,7 +14,10 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "workspaceContains:.vscode/tasks.json",
+    "workspaceContains:.devcontainer/devcontainer.json",
+    "workspaceContains:.git/config"
   ],
   "capabilities": {
     "untrustedWorkspaces": {

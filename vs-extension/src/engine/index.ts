@@ -11,6 +11,14 @@ import type { EngineResult, Finding, Rule, ScanContext, VirtualFile } from './ty
 
 export const RULES: Rule[] = [...vscodeFileRules, ...pmConfigRules, ...gitConfigRules, ...textTrickRules, ...installScriptRules, ...sourceRules, ...depRules, ...secretRules];
 
+/**
+ * The quick scan (Flow 2, a folder opened directly): only what runs by itself when a folder is opened or used. Auto-run
+ * tasks and settings, dev containers, package-manager config, install scripts, git config and hooks, and hidden text.
+ * Source patterns, secrets and dependencies are left to the full scan: they do not start by themselves, and skipping
+ * them is what keeps this fast.
+ */
+export const QUICK_RULES: Rule[] = [...vscodeFileRules, ...pmConfigRules, ...gitConfigRules, ...textTrickRules, ...installScriptRules];
+
 export const RULE_FAILED = 'A detection rule failed; results may be incomplete';
 
 /** A rule only returns findings, so a file it could not parse is reported as unchecked here (I-5). */

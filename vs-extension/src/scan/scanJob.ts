@@ -1,5 +1,5 @@
 import type { ScanLimits } from '../config/settings';
-import { engineScan, RULES } from '../engine';
+import { engineScan, QUICK_RULES, RULES } from '../engine';
 import type { EngineResult, Rule, ScanContext } from '../engine/types';
 import { walk, type WalkOptions } from './walker';
 
@@ -16,7 +16,7 @@ const WALK_OPTIONS: Record<ScanContext['mode'], WalkOptions> = {
 };
 
 /** Walk + engine. Runs inside the worker; exported for tests. */
-export async function scanJob(job: ScanJob, rules: Rule[] = RULES): Promise<EngineResult> {
+export async function scanJob(job: ScanJob, rules: Rule[] = job.ctx.mode === 'quick' ? QUICK_RULES : RULES): Promise<EngineResult> {
   const walked = await walk(job.root, job.limits, WALK_OPTIONS[job.ctx.mode]);
   const result = engineScan(walked.files, job.ctx, rules);
   return {

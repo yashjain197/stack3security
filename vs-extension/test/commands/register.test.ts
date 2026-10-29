@@ -32,6 +32,14 @@ describe('extension wiring', () => {
     const cmds = (pkg as { contributes: { commands: { command: string; title: string }[] } }).contributes.commands;
     expect(cmds).toContainEqual({ command: 'stack3.cloneAndScan', title: 'Stack3: Clone and scan safely' });
   });
+  test('activation events: startup, plus folders that contain auto-run or git files (Flow 2)', () => {
+    expect((pkg as { activationEvents: string[] }).activationEvents).toEqual([
+      'onStartupFinished',
+      'workspaceContains:.vscode/tasks.json',
+      'workspaceContains:.devcontainer/devcontainer.json',
+      'workspaceContains:.git/config',
+    ]);
+  });
   test('activate registers stack3.cloneAndScan and keeps its disposable', () => {
     const ctx = context();
     activate(ctx);

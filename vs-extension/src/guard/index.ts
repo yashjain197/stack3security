@@ -6,6 +6,7 @@ import { createStatusBar } from '../ui/statusbar';
 import { notCheckedDiagnostics, toDiagnostics } from '../ui/diagnostics';
 import type { Level, Verdict } from '../engine/types';
 import { registerStagedSecretWarning } from './staged';
+import { checkUnknownFolder, QUICK_LIMITS, wasWarnedRecently, type UnknownFolderDeps } from './unknownFolder';
 import { registerWatchers, type RootInfo } from './watchers';
 
 /** Starts Flow 3: manifest watchers, editor diagnostics, the status bar item and the staged-secret warning. */
@@ -17,7 +18,21 @@ export function registerGuard(context: vscode.ExtensionContext): void {
 
   const refreshStatus = () => status.update([...levels.values()]);
 
+  // Flow 2: a folder opened directly gets a quick look the moment it opens, before the first watcher scan.
+  const unknownFolderDeps: UnknownFolderDeps = {
+    scan: (root) => runScan(root, { mode: 'quick', checkedAt: new Date().toISOString() }, QUICK_LIMITS),
+    showModal: async (title, detail, buttons) => vscode.window.showWarningMessage(title, { modal: true, detail }, ...buttons),
+    closeFolder: () => vscode.commands.executeCommand('workbench.action.closeFolder'),
+    state: context.globalState,
+    now: Date.now,
+  };
+  const checkFolders = (folders: readonly vscode.WorkspaceFolder[]) => {
+    for (const f of folders) void checkUnknownFolder(f.uri, vscode.workspace.isTrusted, unknownFolderDeps);
+  };
+  checkFolders(vscode.workspace.workspaceFolders ?? []);
+
   context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders((e) => checkFolders(e.added)),
     collection,
     status,
     registerWatchers(context, {
@@ -49,7 +64,10 @@ export function registerGuard(context: vscode.ExtensionContext): void {
         levels.delete(root.path);
         refreshStatus();
       },
-      notify: (m) => void vscode.window.showWarningMessage(m),
+      // A folder the unknown-folder check has just warned about is not announced a second time.
+      notify: (m, root) => {
+        if (!wasWarnedRecently(root.path)) void vscode.window.showWarningMessage(m);
+      },
       watch: (root, glob, onEvent) => {
         const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root.path), glob));
         const subs = [w.onDidCreate((u) => onEvent(u.fsPath)), w.onDidChange((u) => onEvent(u.fsPath)), w.onDidDelete((u) => onEvent(u.fsPath))];
