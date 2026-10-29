@@ -1,0 +1,20 @@
+{
+  "level": "critical",
+  "target": { "type": "repo", "id": "github.com/x/interview-task@3f9c2a1" },
+  "findings": [
+    {
+      "ruleId": "tasks.folder-open",
+      "layer": "repo-file",
+      "severity": "critical",
+      "title": "Task runs a hidden command when the folder opens",
+      "evidence": ".vscode/tasks.json:14 runOn: folderOpen → curl … | sh",
+      "location": { "file": ".vscode/tasks.json", "line": 14 },
+      "source": "rules",
+      "checkedAt": "2026-10-29T18:00:00+05:30"
+    }
+  ],
+  "indicators": { "addresses": ["0x9f00000000000000000000000000000000000001"], "domains": ["bad.example"] },
+  "notChecked": [],
+  "actions": ["Do not open this folder in VS Code"],
+  "explanation": "This folder runs a download-and-execute command as soon as VS Code opens it."
+}

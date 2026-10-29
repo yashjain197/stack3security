@@ -1,0 +1,4 @@
+{
+  "explanation": "A task in .vscode/tasks.json is set to run when the folder opens. It downloads a script and runs it in your shell.",
+  "fix": "Do not open this folder in VS Code. Delete it, or open it with auto-run disabled and remove .vscode/tasks.json."
+}

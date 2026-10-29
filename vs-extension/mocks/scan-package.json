@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "ruleId": "socket.malware",
+      "layer": "dependency",
+      "severity": "critical",
+      "title": "Known malware: package exfiltrates environment variables",
+      "evidence": "pkg:npm/some-lib@1.0.3 — Socket alert: malware",
+      "source": "socket",
+      "checkedAt": "2026-10-29T18:00:00+05:30"
+    }
+  ]
+}
