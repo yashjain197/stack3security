@@ -1,0 +1,13 @@
+services:
+  webpage:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:${WEBPAGE_PORT:-3000}:3000"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
