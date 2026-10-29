@@ -73,7 +73,7 @@ export function registerStagedSecretWarning(_ctx: Pick<vscode.ExtensionContext, 
 
   async function check(repo: GitRepository): Promise<void> {
     if (disposed) return;
-    const staged = repo.state.indexChanges.filter((c) => c.status !== INDEX_DELETED).slice(0, MAX_FILES);
+    const staged = (repo.state.indexChanges ?? []).filter((c) => c.status !== INDEX_DELETED).slice(0, MAX_FILES);
     const root = repo.rootUri.fsPath;
     const files: VirtualFile[] = [];
     for (const c of staged) {
@@ -97,7 +97,8 @@ export function registerStagedSecretWarning(_ctx: Pick<vscode.ExtensionContext, 
     const trigger = () => {
       const t = timers.get(repo);
       if (t) clearTimeout(t);
-      timers.set(repo, setTimeout(() => void check(repo), deps.debounceMs ?? DEBOUNCE_MS));
+      // A timer must never throw: a quirk in the git API would otherwise become an unhandled rejection in the editor.
+      timers.set(repo, setTimeout(() => void check(repo).catch(() => undefined), deps.debounceMs ?? DEBOUNCE_MS));
     };
     subs.push(repo.state.onDidChange(trigger));
     trigger();

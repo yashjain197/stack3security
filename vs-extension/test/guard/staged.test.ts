@@ -60,13 +60,15 @@ describe('staged secret warning (V-3: read-only, never runs git)', () => {
     registerStagedSecretWarning({ subscriptions: [] }, t.deps);
     await flush();
     t.notes.length = 0;
-    const spy = vi.spyOn(t.repo.state, 'indexChanges', 'get');
+    let reads = 0;
+    const original = t.repo.state.indexChanges;
+    Object.defineProperty(t.repo.state, 'indexChanges', { get: () => (reads++, original) });
     for (let i = 0; i < 10; i++) {
       t.change();
       await sleep(4);
     }
     await flush();
-    expect(spy.mock.calls.length).toBeLessThanOrEqual(1);
+    expect(reads).toBe(1);
   });
   test('a clean staged file, or nothing staged, is silent', async () => {
     const t = setup({ 'a.js': 'export const x = 1;' });
@@ -132,6 +134,25 @@ describe('staged secret warning (V-3: read-only, never runs git)', () => {
     t.deps.getGitApi = async () => { throw new Error('git extension crashed'); };
     registerStagedSecretWarning({ subscriptions: [] }, t.deps);
     await expect(flush()).resolves.toBeUndefined();
+  });
+  test('a git API that misbehaves inside the timer is swallowed, not an unhandled rejection', async () => {
+    const t = setup({ 'a.js': `PRIVATE_KEY=0x${KEY}` });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => void unhandled.push(e);
+    process.on('unhandledRejection', onUnhandled);
+    Object.defineProperty(t.repo.state, 'indexChanges', { get: () => { throw new Error('git extension quirk'); } });
+    registerStagedSecretWarning({ subscriptions: [] }, t.deps);
+    await flush();
+    process.off('unhandledRejection', onUnhandled);
+    expect(unhandled).toEqual([]);
+    expect(t.notes).toEqual([]);
+  });
+  test('an index that is missing is treated as nothing staged', async () => {
+    const t = setup({ 'a.js': 'x' });
+    (t.repo.state as unknown as { indexChanges?: unknown }).indexChanges = undefined;
+    registerStagedSecretWarning({ subscriptions: [] }, t.deps);
+    await flush();
+    expect(t.notes).toEqual([]);
   });
   test('after dispose nothing is reported', async () => {
     const t = setup({ 'a.js': `PRIVATE_KEY=0x${KEY}` });
