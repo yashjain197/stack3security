@@ -1,0 +1,37 @@
+# All work on the extension runs here, not on the host.
+#   docker compose build                      # after package.json / lockfile changes
+#   docker compose run --rm test              # full test suite, no network
+#   docker compose run --rm test npm run lint
+#   docker compose run --rm deps npm install --save-exact <pkg>   # only service with network
+
+x-hardened: &hardened
+  image: stack3-vscode-dev     # built once, by the `test` service; `deps` reuses it
+  user: node
+  working_dir: /app
+  volumes:
+    - .:/app
+    - /app/node_modules        # container's own node_modules, never the host's
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /home/node
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  environment:
+    NPM_CONFIG_UPDATE_NOTIFIER: "false"
+
+services:
+  test:
+    <<: *hardened
+    build:
+      context: .
+      network: host            # build-time only: the default bridge stalls on some hosts (apt/npm downloads). Runtime stays isolated.
+    network_mode: none         # tests must not reach the network (I-6, I-16)
+    command: ["npm", "test"]
+
+  deps:
+    <<: *hardened
+    read_only: false
+    volumes:
+      - .:/app                 # writes package.json/lockfile back to the host
+    command: ["npm", "ci", "--ignore-scripts"]
