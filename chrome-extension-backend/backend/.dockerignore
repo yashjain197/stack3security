@@ -1,0 +1,13 @@
+# Keep secrets, local state and tests out of the image.
+# Made by Yash Jain with passion.
+.venv
+.env
+.env.*
+!.env.example
+.dev-keys
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+tests
+*.egg-info

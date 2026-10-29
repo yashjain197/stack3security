@@ -1,0 +1,87 @@
+# Stack3 Security: whole-project stack.
+# Runs the website (frontend/webpage) on http://localhost:3000 and the Chrome/core API (identity, billing, teams)
+# on http://localhost:8000 with Redis; the database is Supabase Postgres (DATABASE_URL in
+# chrome-extension-backend/backend/.env). Imran's VS Code API (`vscode-api`) and the Caddy reverse proxy will be
+# added here once their Dockerfiles exist.
+# Made by Yash Jain with passion.
+#
+# Run:   docker-compose up --build -d
+# Logs:  docker-compose logs -f chrome-api webpage
+# Stop:  docker-compose down
+#
+# Offline fallback (no Supabase): set in .env
+#   DATABASE_URL=postgresql+asyncpg://stack3:stack3-local-only@postgres:5432/stack3
+# and run:  docker-compose --profile local-db up --build -d
+
+name: stack3
+
+services:
+  webpage:
+    build:
+      context: ./frontend/webpage
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Open the site as http://localhost:3000 (not 127.0.0.1): the API only accepts that exact origin
+    ports:
+      - "127.0.0.1:${WEBPAGE_PORT:-3000}:3000"
+    depends_on:
+      chrome-api:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  chrome-api:
+    build:
+      context: ./chrome-extension-backend/backend
+    restart: unless-stopped
+    env_file:
+      - ./chrome-extension-backend/backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DB_SCHEMA: chrome
+      PORT: "8000"
+    volumes:
+      - chrome-api-dev-keys:/srv/.dev-keys
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["local-db"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stack3
+      POSTGRES_PASSWORD: stack3-local-only
+      POSTGRES_DB: stack3
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stack3 -d stack3"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  chrome-api-dev-keys:
