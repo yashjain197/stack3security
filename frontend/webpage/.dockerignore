@@ -4,6 +4,9 @@
 !server.js
 !index.html
 !app.js
+!api.js
+!account.js
+!html.js
 !styles.css
 !mock-data.js
 !security-service.js

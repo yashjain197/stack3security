@@ -19,6 +19,8 @@ services:
   webpage:
     build:
       context: ./frontend/webpage
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
     restart: unless-stopped
     init: true
     read_only: true

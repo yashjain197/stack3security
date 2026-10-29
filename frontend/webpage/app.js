@@ -1,4 +1,4 @@
-import { demoNotice, reports, transactionExample } from "./mock-data.js";
+import { contractExample, demoNotice, reports, transactionExample } from "./mock-data.js";
 import {
   analyzeSampleTransaction,
   getDashboardData,
@@ -6,8 +6,16 @@ import {
   reviewSampleContract,
   scanWebsite,
 } from "./security-service.js";
+import { createApiClient } from "./api.js";
+import { accountPaths, createAccountUI } from "./account.js";
+import { escapeHtml } from "./html.js";
 
 const app = document.querySelector("#app");
+let api;
+let accountUI;
+let renderVersion = 0;
+let startupError = null;
+let initialized = false;
 const routeTitles = {
   "/": "Stack3 Security — Verify what happens underneath",
   "/pricing": "Pricing — Stack3 Security",
@@ -18,6 +26,13 @@ const routeTitles = {
   "/dashboard/contracts": "Contract overview — Stack3 Security",
   "/dashboard/reports": "Scan reports — Stack3 Security",
   "/dashboard/settings": "Settings — Stack3 Security",
+  "/login": "Sign in — Stack3 Security",
+  "/account/billing": "Billing — Stack3 Security",
+  "/account/sessions": "Devices — Stack3 Security",
+  "/account/team": "Team — Stack3 Security",
+  "/billing/return": "Payment confirmation — Stack3 Security",
+  "/link": "Link a device — Stack3 Security",
+  "/teams/join": "Join a team — Stack3 Security",
 };
 
 const navItems = [
@@ -27,6 +42,9 @@ const navItems = [
   { path: "/dashboard/contracts", label: "Contracts", icon: "blocks" },
   { path: "/dashboard/reports", label: "Reports", icon: "file" },
   { path: "/dashboard/settings", label: "Settings", icon: "settings" },
+  { path: "/account/billing", label: "Billing", icon: "file" },
+  { path: "/account/team", label: "Team", icon: "grid" },
+  { path: "/account/sessions", label: "Devices", icon: "lock" },
 ];
 
 const icons = {
@@ -40,24 +58,12 @@ const icons = {
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   external: '<path d="M14 3h7v7M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   lock: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   spark: '<path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2L12 3ZM19 14l1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z"/>',
 };
 
 const svg = (name, className = "") =>
   `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? ""}</svg>`;
-
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (character) => {
-    const entities = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    };
-    return entities[character];
-  });
-}
 
 function verdictLabel(verdict) {
   return {
@@ -82,7 +88,7 @@ function buttonLink(path, label, style = "button button--primary", icon = "") {
 }
 
 function publicHeader() {
-  return `<header class="public-header"><a class="brand" href="/" data-link><span class="brand-mark">${svg("shield")}</span><span>stack3<span class="brand-light"> security</span></span></a><nav class="public-nav" aria-label="Main navigation"><a href="/#product" data-link>Product</a><a href="/how-it-works" data-link>How it works</a><a href="/pricing" data-link>Pricing</a></nav><div class="public-actions"><a class="sign-in" href="/dashboard/settings" data-link>Sign in</a>${buttonLink("/dashboard", "Open dashboard", "button button--primary button--small")}</div><button class="menu-toggle" aria-label="Open navigation menu" aria-expanded="false">${svg("grid")}</button></header>`;
+  return `<header class="public-header"><a class="brand" href="/" data-link><span class="brand-mark">${svg("shield")}</span><span>stack3<span class="brand-light"> security</span></span></a><nav class="public-nav" aria-label="Main navigation"><a href="/#product" data-link>Product</a><a href="/how-it-works" data-link>How it works</a><a href="/pricing" data-link>Pricing</a></nav><div class="public-actions"><a class="sign-in" href="${api?.signedIn ? "/dashboard/settings" : "/login"}" data-link>${api?.signedIn ? "Account" : "Sign in"}</a>${buttonLink("/dashboard", "Open dashboard", "button button--primary button--small")}</div><button class="menu-toggle" aria-label="Open navigation menu" aria-expanded="false">${svg("grid")}</button></header>`;
 }
 
 function publicFooter() {
@@ -109,7 +115,9 @@ function appShell(content, activePath) {
         `<a class="side-link ${activePath === item.path || (item.path === "/dashboard" && activePath === "/dashboard") ? "is-active" : ""}" href="${item.path}" data-link>${svg(item.icon)}<span>${item.label}</span>${item.path === "/dashboard/scanner" ? '<span class="side-pill">DEMO</span>' : ""}</a>`,
     )
     .join("");
-  return `<div class="app-shell"><aside class="sidebar"><a class="brand" href="/" data-link><span class="brand-mark">${svg("shield")}</span><span>stack3<span class="brand-light"> security</span></span></a><div class="workspace-label">WORKSPACE</div><nav class="side-nav" aria-label="Dashboard navigation">${links}</nav><div class="sidebar-bottom"><div class="sidebar-help"><span class="help-icon">${svg("spark")}</span><strong>Security, with context.</strong><p>Review evidence before you decide.</p><a href="/how-it-works" data-link>How it works ${svg("arrow")}</a></div><button class="user-profile" type="button" aria-label="Demo account settings" data-navigate="/dashboard/settings"><span class="avatar">D</span><span class="user-info"><strong>Demo workspace</strong><small>Demo mode</small></span><span class="profile-more">···</span></button></div></aside><div class="app-main"><header class="app-topbar"><button class="mobile-menu" aria-label="Toggle menu" aria-expanded="false">${svg("grid")}</button><div class="breadcrumbs"><a href="/dashboard" data-link>Workspace</a><span>/</span><strong>${escapeHtml(navItems.find((item) => item.path === activePath)?.label ?? "Overview")}</strong></div><div class="topbar-right"><span class="demo-mode">${svg("shield")} DEMO MODE</span><span class="topbar-avatar">D</span></div></header><main class="dashboard-content">${content}</main><footer class="app-footer"><span>Stack3 Security · Illustrative demo</span><span>Risk indicators, not a guarantee of safety.</span></footer></div></div>`;
+  const email = api?.user?.email;
+  const initial = escapeHtml(email?.charAt(0).toUpperCase() ?? "D");
+  return `<div class="app-shell"><aside class="sidebar"><a class="brand" href="/" data-link><span class="brand-mark">${svg("shield")}</span><span>stack3<span class="brand-light"> security</span></span></a><div class="workspace-label">WORKSPACE</div><nav class="side-nav" aria-label="Dashboard navigation">${links}</nav><div class="sidebar-bottom"><div class="sidebar-help"><span class="help-icon">${svg("spark")}</span><strong>Security, with context.</strong><p>Review evidence before you decide.</p><a href="/how-it-works" data-link>How it works ${svg("arrow")}</a></div><button class="user-profile" type="button" aria-label="Account settings" data-navigate="/dashboard/settings"><span class="avatar">${initial}</span><span class="user-info"><strong>${escapeHtml(email ?? "Demo workspace")}</strong><small>${email ? "Signed in" : "Demo mode"}</small></span><span class="profile-more">···</span></button><button class="sidebar-signout" type="button" data-account-action="logout">${svg("logout")}<span>Sign out</span></button></div></aside><div class="app-main"><header class="app-topbar"><button class="mobile-menu" aria-label="Toggle menu" aria-expanded="false">${svg("grid")}</button><div class="breadcrumbs"><a href="/dashboard" data-link>Workspace</a><span>/</span><strong>${escapeHtml(navItems.find((item) => item.path === activePath)?.label ?? "Account")}</strong></div><div class="topbar-right"><span class="demo-mode">${svg("shield")} ${activePath.startsWith("/dashboard") && activePath !== "/dashboard/settings" ? "DEMO SCANS" : "LIVE ACCOUNT"}</span><span class="topbar-avatar">${initial}</span></div></header><main class="dashboard-content">${content}</main><footer class="app-footer"><span>Stack3 Security · Scanning results are illustrative</span><span>Risk indicators, not a guarantee of safety.</span></footer></div></div>`;
 }
 
 function pageHeading(eyebrow, title, subtitle, action = "") {
@@ -144,7 +152,7 @@ function findingCard(finding, index = 1) {
 }
 
 function scannerPage() {
-  return appShell(`${demoBanner()}${pageHeading("WEB3 GUARD", "Website risk scanner", "Inspect a domain for suspicious identity, page behavior, and recovery-phrase requests.")}<div class="scanner-layout"><section class="panel scanner-form-panel"><div class="panel-header"><div><span class="feature-kicker">DEMO SCAN</span><h2>Inspect a website</h2><p>Try the sample fixture to see how findings and evidence are presented.</p></div><span class="scanner-icon">${svg("scan")}</span></div><form id="scanner-form" class="form-stack" novalidate><label for="website-url">Website URL</label><div class="input-with-icon">${svg("external")}<input id="website-url" name="website" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-describedby="scanner-helper scanner-error" /><button class="button button--primary" type="submit">Scan website ${svg("arrow")}</button></div><small id="scanner-helper" class="input-helper">Sample supported: demo-recovery-site.test</small><p id="scanner-error" class="form-error" role="alert" hidden></p></form><div class="privacy-note">${svg("lock")}<span>Never enter a seed phrase or private key. This demo makes no network requests.</span></div></section><section class="panel inspection-panel"><div class="panel-header"><div><h2>What the scanner may inspect</h2><p>Checks depend on available signals and supported data.</p></div></div><ul class="check-list"><li>${checkIcon()}<span>Lookalike or suspicious domain patterns</span></li><li>${checkIcon()}<span>Recovery-phrase or private-key prompts</span></li><li>${checkIcon()}<span>Suspicious form destinations</span></li><li>${checkIcon()}<span>Wallet-brand impersonation signals</span></li><li>${checkIcon()}<span>Relevant page-script indicators, when supported</span></li></ul></section></div><section id="scanner-result" class="result-region" aria-live="polite"></section>`, "/dashboard/scanner");
+  return appShell(`${demoBanner()}${pageHeading("WEB3 GUARD", "Website risk scanner", "Inspect a domain for suspicious identity, page behavior, and recovery-phrase requests.")}<div class="scanner-layout"><section class="panel scanner-form-panel"><div class="panel-header"><div><span class="feature-kicker">DEMO SCAN</span><h2>Inspect a website</h2><p>Try the sample fixture to see how findings and evidence are presented.</p></div><span class="scanner-icon">${svg("scan")}</span></div><form id="scanner-form" class="form-stack" novalidate><label for="website-url">Website URL</label><div class="input-with-icon">${svg("external")}<input id="website-url" name="website" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-describedby="scanner-helper scanner-error" /><button class="button button--primary" type="submit">Scan website ${svg("arrow")}</button></div><small id="scanner-helper" class="input-helper">Sample supported: demo-recovery-site.test</small><p id="scanner-error" class="form-error" role="alert" hidden></p></form><div class="privacy-note">${svg("lock")}<span>Never enter a seed phrase or private key. This sample scan does not send the entered URL to the API.</span></div></section><section class="panel inspection-panel"><div class="panel-header"><div><h2>What the scanner may inspect</h2><p>Checks depend on available signals and supported data.</p></div></div><ul class="check-list"><li>${checkIcon()}<span>Lookalike or suspicious domain patterns</span></li><li>${checkIcon()}<span>Recovery-phrase or private-key prompts</span></li><li>${checkIcon()}<span>Suspicious form destinations</span></li><li>${checkIcon()}<span>Wallet-brand impersonation signals</span></li><li>${checkIcon()}<span>Relevant page-script indicators, when supported</span></li></ul></section></div><section id="scanner-result" class="result-region" aria-live="polite"></section>`, "/dashboard/scanner");
 }
 
 function checkIcon() {
@@ -172,7 +180,7 @@ function contractsPage() {
   return appShell(`${demoBanner()}${pageHeading("WEB3 GUARD", "Smart-contract overview", "Review available contract information and risk indicators before interacting.")}<section class="panel contract-search-panel"><div class="panel-header"><div><h2>Review a contract</h2><p>Live verification is not connected. Enter the sample fixture to see the illustrative view.</p></div><span class="scanner-icon">${svg("blocks")}</span></div><form id="contract-form" class="form-stack" novalidate><label for="contract-address">Contract address</label><div class="input-with-icon">${svg("blocks")}<input id="contract-address" name="contract" type="text" placeholder="Paste a public contract address" aria-describedby="contract-error" /><button class="button button--primary" type="submit">Review contract ${svg("arrow")}</button></div><p id="contract-error" class="form-error" role="alert" hidden></p><span class="input-helper">Sample fixture: sample-contract. No address lookup is performed.</span></form></section><section id="contract-result" class="result-region">${contractResult()}</section>`, "/dashboard/contracts");
 }
 
-function contractResult(result) {
+function contractResult(result = contractExample) {
   return `<section class="result-panel"><div class="result-header"><div><div class="result-label">ILLUSTRATIVE DEMO DATA</div><h2>${escapeHtml(result.target)}</h2><p>${escapeHtml(result.network)}</p></div>${badge(result.verdict)}</div><div class="contract-facts">${detailItem("Source verification", result.sourceVerification)}${detailItem("Proxy status", result.proxyStatus)}${detailItem("Owner permissions", result.ownerPermissions)}${detailItem("Deployment age", result.deploymentAge)}</div><div class="result-explanation"><span class="result-explanation-icon">${svg("shield")}</span><p>${escapeHtml(result.explanation)}</p></div><div class="limitations"><h3>Checks not performed</h3><ul>${result.notChecked.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></section>`;
 }
 
@@ -188,10 +196,6 @@ function reportsPage() {
   return appShell(`${demoBanner()}${pageHeading("YOUR SECURITY WORKSPACE", "Scan reports", "Review findings, evidence, and checks not performed.")}${detail}`, "/dashboard/reports");
 }
 
-function settingsPage() {
-  return appShell(`${demoBanner("Account and subscription settings are not connected in this demo.")}${pageHeading("YOUR WORKSPACE", "Settings", "Account and product preferences.")}<div class="settings-grid"><section class="panel settings-card"><span class="settings-icon">${svg("lock")}</span><h2>Account</h2><p>Authentication integration is pending.</p><span class="pending-chip">NOT CONNECTED</span></section><section class="panel settings-card"><span class="settings-icon">${svg("spark")}</span><h2>Subscription</h2><p>Dodo Payments integration is pending. No checkout is available in this demo.</p><span class="pending-chip">NOT CONNECTED</span></section><section class="panel settings-card settings-card--wide"><span class="settings-icon">${svg("shield")}</span><h2>Security and privacy</h2><p>Data handling details for live scans will be provided when the backend integration is confirmed. This local demo does not send scan inputs to a service.</p><span class="pending-chip pending-chip--blue">LOCAL DEMO ONLY</span></section></div>`, "/dashboard/settings");
-}
-
 function howItWorksPage() {
   const steps = [
     ["01", "Inspect the signals", "The developer side examines suspicious repository files and dependency risk indicators. The user side examines page behavior, transaction requests, and available contract information."],
@@ -202,83 +206,70 @@ function howItWorksPage() {
   return `<div class="public-shell">${publicHeader()}<main class="public-subpage"><section class="subpage-hero"><span class="eyebrow">HOW IT WORKS</span><h1>Security should start before the click, install, or signature.</h1><p>Stack3 is designed to inspect risk at two points: when developers evaluate code and when users interact with Web3 websites and wallet requests.</p>${buttonLink("/dashboard", "Explore the demo", "button button--primary button--large", "arrow")}</section><section class="steps-list">${steps.map(([number, title, description]) => `<article class="step-item"><span>${number}</span><div><h2>${title}</h2><p>${description}</p></div></article>`).join("")}</section><section class="not-promises"><div class="eyebrow">IMPORTANT LIMITATIONS</div><h2>What Stack3 does not promise</h2><ul><li>It cannot detect every scam or malicious package.</li><li>A verified contract or older deployment is not automatically trustworthy.</li><li>A website with no known reputation signals is not necessarily legitimate.</li><li>A transaction explanation is only as accurate as the decoded data and available context.</li><li>AI explanations can be wrong and should be grounded in inspectable evidence.</li></ul></section></main>${publicFooter()}</div>`;
 }
 
-function pricingPage() {
-  const plans = [
-    {
-      name: "Free",
-      title: "Protection for everyone",
-      audience: "Everyone",
-      price: '<span class="price-amount">$0</span><span class="price-period">forever</span>',
-      features: [
-        "Full Chrome protection: page scan, transaction review, phishing checks, and GitHub banner",
-        "Unlimited local VS Code repository-file rules",
-        '20 "Clone and scan safely" runs each month',
-      ],
-      action: "Explore the demo",
-      path: "/dashboard",
-      primary: false,
-    },
-    {
-      name: "Pro",
-      title: "More depth for solo builders",
-      audience: "Solo Web3 developers",
-      features: [
-        "Unlimited clone-and-scan",
-        "Socket package scanning",
-        "Secret scanning",
-        "AI explanations",
-        "Warnings while you work",
-        "CLI for private repositories",
-        "Report history",
-      ],
-      action: "Start 30-day free trial",
-      primary: true,
-    },
-    {
-      name: "Team",
-      title: "Built for teams",
-      audience: "Web3 teams and audit shops",
-      price: '<span class="price-amount">$29</span><span class="price-period">/ seat / month</span>',
-      priceNote: "3 seats minimum · $87/month minimum",
-      trial: "30-day free trial",
-      features: [],
-      action: "Team details coming soon",
-      primary: false,
-    },
-  ];
-  const planPrice = (plan) =>
-    plan.name === "Pro"
-      ? `<div class="plan-price" aria-live="polite"><span class="price-amount" data-pro-price>$9</span><span class="price-period" data-pro-period>/ month</span><span class="price-note" data-pro-note>30-day free trial · billed monthly</span></div>`
-      : `<div class="plan-price">${plan.price}${plan.priceNote ? `<span class="price-note">${plan.priceNote}</span>` : ""}${plan.trial ? `<span class="price-note">${plan.trial}</span>` : ""}</div>`;
-  const planFeatures = (plan) =>
-    plan.features.length
-      ? `<ul class="plan-features">${plan.features.map((feature) => `<li>${checkIcon()}<span>${feature}</span></li>`).join("")}</ul>`
-      : `<div class="team-features-pending"><span class="pending-chip">FEATURES TO BE CONFIRMED</span><p>Team plan inclusions have not been provided yet.</p></div>`;
-  const planAction = (plan) =>
-    plan.path
-      ? buttonLink(plan.path, plan.action, "button button--secondary button--full", "arrow")
-      : `<button class="button ${plan.primary ? "button--primary" : "button--disabled"} button--full" type="button" disabled>${plan.action}${plan.primary ? svg("arrow") : ""}</button>`;
-
-  return `<div class="public-shell">${publicHeader()}<main class="pricing-page"><section class="subpage-hero pricing-hero"><span class="eyebrow">PLANS & ACCESS</span><h1>Protection for every stage.</h1><p>Start with everyday protection, then add deeper code and team workflows as you grow.</p><div class="pricing-notice">${svg("lock")}<span>Plan details shown here are provided by the Stack3 team. Checkout and account setup are not connected in this demo.</span></div></section><section class="pricing-billing" aria-label="Pro billing options"><span>Pro billing</span><div class="billing-switch" role="group" aria-label="Choose Pro billing frequency"><button type="button" data-billing="monthly" aria-pressed="true">Monthly</button><button type="button" data-billing="yearly" aria-pressed="false">Yearly <span>Save $18</span></button></div><small>Pro trial: 30 days on either billing option.</small></section><section class="pricing-grid">${plans.map((plan) => `<article class="pricing-card ${plan.primary ? "pricing-card--featured" : ""}">${plan.primary ? '<span class="plan-recommended">MOST POPULAR</span>' : ""}<span class="plan-kicker">${plan.name.toUpperCase()}</span><h2>${plan.title}</h2><p class="plan-audience">${plan.audience}</p>${planPrice(plan)}${planFeatures(plan)}${planAction(plan)}</article>`).join("")}</section><p class="pricing-footnote">Pro annual billing is $90/year ($7.50/month equivalent). Team pricing is per seat, with a three-seat minimum. Trials and subscriptions are not activated from this page.</p></main>${publicFooter()}</div>`;
-}
-
 function notFoundPage() {
   return `<div class="public-shell">${publicHeader()}<main class="not-found"><span class="eyebrow">NOT FOUND</span><h1>This page isn't in the demo.</h1><p>Choose an available section to continue exploring Stack3 Security.</p>${buttonLink("/dashboard", "Go to dashboard", "button button--primary")}</main>${publicFooter()}</div>`;
 }
 
-function render() {
+function navigate(path, replace = false) {
+  history[replace ? "replaceState" : "pushState"]({}, "", path);
+  void render();
+  window.scrollTo(0, 0);
+}
+
+function accountShell(content, path) {
+  return ["/pricing", "/login", "/link", "/teams/join", "/billing/return"].includes(path)
+    ? `<div class="public-shell">${publicHeader()}<main class="${path === "/pricing" ? "pricing-page" : "account-page"}">${content}</main>${publicFooter()}</div>`
+    : appShell(content, path);
+}
+
+async function render() {
+  if (!initialized) return;
+  const version = ++renderVersion;
+  accountUI.stop();
+  if (api.signedIn) startupError = null;
   const path = location.pathname.replace(/\/+$/, "") || "/";
   document.title = routeTitles[path] ?? "Stack3 Security";
+  if (accountPaths.has(path) || path === "/pricing") {
+    if (path !== "/login" && path !== "/pricing" && !api.signedIn) {
+      navigate(`/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`, true);
+      return;
+    }
+    app.innerHTML = accountShell('<div class="account-loading" role="status"><span class="spinner" aria-hidden="true"></span> Loading account data…</div>', path);
+    try {
+      const content = await accountUI.page(path, new URLSearchParams(location.search));
+      if (version !== renderVersion) return;
+      app.innerHTML = accountShell(content, path);
+      accountUI.mount(path);
+    } catch (error) {
+      if (version !== renderVersion || error.name === "AbortError") return;
+      if (error.status === 401) {
+        navigate(`/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`, true);
+        return;
+      }
+      app.innerHTML = accountShell('<div id="account-message" role="alert" tabindex="-1"></div><button type="button" class="button button--primary" data-account-action="reload">Try again</button>', path);
+      accountUI.showError(error);
+    }
+    return;
+  }
+  if (path.startsWith("/dashboard") && !api.signedIn) {
+    navigate(`/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`, true);
+    return;
+  }
   if (path === "/") app.innerHTML = landingPage();
   else if (path === "/how-it-works") app.innerHTML = howItWorksPage();
-  else if (path === "/pricing") app.innerHTML = pricingPage();
   else if (path === "/dashboard") app.innerHTML = dashboardPage();
   else if (path === "/dashboard/scanner") app.innerHTML = scannerPage();
   else if (path === "/dashboard/transactions") app.innerHTML = transactionsPage();
   else if (path === "/dashboard/contracts") app.innerHTML = contractsPage();
   else if (path === "/dashboard/reports") app.innerHTML = reportsPage();
-  else if (path === "/dashboard/settings") app.innerHTML = settingsPage();
   else app.innerHTML = notFoundPage();
+  if (startupError) {
+    const notice = document.createElement("div");
+    notice.className = "account-message account-message--error";
+    notice.setAttribute("role", "alert");
+    notice.textContent = `${startupError.message} Account services are unavailable; scanning pages remain illustrative demos.`;
+    app.prepend(notice);
+  }
 }
 
 function setLoading(button, label) {
@@ -295,41 +286,24 @@ function clearLoading(button) {
 
 app.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target : null;
-  const billingButton = target?.closest("[data-billing]");
-  if (billingButton) {
-    const yearly = billingButton.dataset.billing === "yearly";
-    document.querySelectorAll("[data-billing]").forEach((button) => {
-      button.setAttribute("aria-pressed", String(button === billingButton));
-    });
-    document.querySelector("[data-pro-price]").textContent = yearly ? "$90" : "$9";
-    document.querySelector("[data-pro-period]").textContent = yearly ? "/ year" : "/ month";
-    document.querySelector("[data-pro-note]").textContent = yearly
-      ? "30-day free trial · billed annually"
-      : "30-day free trial · billed monthly";
-  }
-
   const link = target?.closest("a[data-link]");
-  if (link) {
+  if (link && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.button === 0) {
     const href = link.getAttribute("href");
     if (href?.startsWith("/#")) {
       event.preventDefault();
-      history.pushState({}, "", "/");
-      render();
-      requestAnimationFrame(() => document.querySelector(href.slice(1))?.scrollIntoView({ behavior: "smooth" }));
+      navigate("/");
+      requestAnimationFrame(() => document.getElementById(href.slice(2))?.scrollIntoView({ behavior: "smooth" }));
       return;
     }
     if (href?.startsWith("/")) {
       event.preventDefault();
-      history.pushState({}, "", href);
-      render();
-      window.scrollTo(0, 0);
+      navigate(href);
     }
   }
 
   const navButton = target?.closest("[data-navigate]");
   if (navButton) {
-    history.pushState({}, "", navButton.dataset.navigate);
-    render();
+    navigate(navButton.dataset.navigate);
   }
 
   if (target?.closest(".mobile-menu")) {
@@ -347,6 +321,7 @@ app.addEventListener("click", (event) => {
 app.addEventListener("submit", async (event) => {
   const form = event.target;
   if (!(form instanceof HTMLFormElement)) return;
+  if (form.dataset.accountForm) return;
   event.preventDefault();
 
   if (form.id === "scanner-form") {
@@ -400,4 +375,40 @@ app.addEventListener("click", async (event) => {
 
 window.addEventListener("popstate", render);
 
-render();
+async function start() {
+  app.innerHTML = '<div class="account-loading" role="status">Connecting to Stack3…</div>';
+  try {
+    const response = await fetch("/config.json", { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error("Unable to load webpage API configuration.");
+    const config = await response.json();
+    const base = new URL(config.apiBaseUrl);
+    if (!["http:", "https:"].includes(base.protocol) || base.username || base.password) throw new Error("Invalid API base URL.");
+    api = createApiClient({
+      baseUrl: base.href.replace(/\/$/, ""),
+      onSignedOut() {
+        if (initialized && accountPaths.has(location.pathname) && location.pathname !== "/login") {
+          navigate(`/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`, true);
+        }
+      },
+      onError(error) {
+        startupError = error;
+        if (error.status === 401) navigate(`/login?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`, true);
+        else if (document.querySelector("#account-message")) accountUI.showError(error);
+        else void render();
+      },
+    });
+    accountUI = createAccountUI({ api, navigate, render });
+    accountUI.bind(app);
+    try {
+      await api.initialize();
+    } catch (error) {
+      startupError = error;
+    }
+    initialized = true;
+    await render();
+  } catch (error) {
+    app.textContent = `Unable to initialize Stack3: ${error.message} Reload to try again.`;
+  }
+}
+
+void start();
