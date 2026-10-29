@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.vsix
 coverage/
+
+# Local secrets: keys live in the environment or a local .env, never in git
+.env
+.env.*
+!.env.example
