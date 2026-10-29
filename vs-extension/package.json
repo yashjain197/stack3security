@@ -1,0 +1,108 @@
+{
+  "name": "stack3-vscode",
+  "displayName": "Stack3 Security",
+  "description": "Scan a repo before you open it: auto-run files, install scripts, malicious packages and leaked secrets.",
+  "version": "0.1.0",
+  "publisher": "stack3",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "Stack3 never runs workspace code; it only reads files as data.",
+      "restrictedConfigurations": [
+        "stack3.apiUrl",
+        "stack3.dev.allowLocalhost",
+        "stack3.explain.sendSnippets",
+        "stack3.report.mode",
+        "stack3.scan.limits"
+      ]
+    }
+  },
+  "contributes": {
+    "commands": [],
+    "configuration": {
+      "title": "Stack3",
+      "properties": {
+        "stack3.apiUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "markdownDescription": "Stack3 API origin (HTTPS). Empty means the API is not configured and package checks are reported as not checked."
+        },
+        "stack3.dev.allowLocalhost": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Allow http://localhost as the API origin (development only)."
+        },
+        "stack3.explain.sendSnippets": {
+          "type": "string",
+          "enum": [
+            "publicOnly",
+            "always",
+            "never"
+          ],
+          "default": "publicOnly",
+          "scope": "application",
+          "description": "When to send redacted flagged snippets to the AI explanation service."
+        },
+        "stack3.report.mode": {
+          "type": "string",
+          "enum": [
+            "publicAuto",
+            "ask",
+            "never"
+          ],
+          "default": "publicAuto",
+          "scope": "application",
+          "description": "When to report attacker wallets and domains to the Stack3 threat graph."
+        },
+        "stack3.scan.limits": {
+          "type": "object",
+          "scope": "application",
+          "description": "Scan bounds. Exceeding any bound gives an \"unknown\" verdict.",
+          "default": {
+            "maxFiles": 20000,
+            "maxFileBytes": 1048576,
+            "maxTotalBytes": 52428800,
+            "maxDepth": 32,
+            "timeoutMs": 30000
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.3.1",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.90.0",
+    "@vitest/coverage-v8": "5.0.5",
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "fast-check": "4.10.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
+  }
+}
