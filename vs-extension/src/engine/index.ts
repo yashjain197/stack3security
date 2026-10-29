@@ -1,11 +1,13 @@
 import { collectPurls } from './purls';
 import { gitConfigRules } from './rules/gitConfig';
+import { installScriptRules } from './rules/installScripts';
 import { pmConfigRules } from './rules/pmConfig';
+import { sourceRules } from './rules/source';
 import { textTrickRules } from './rules/textTricks';
 import { vscodeFileRules } from './rules/vscodeFiles';
 import type { EngineResult, Finding, Rule, ScanContext, VirtualFile } from './types';
 
-export const RULES: Rule[] = [...vscodeFileRules, ...pmConfigRules, ...gitConfigRules, ...textTrickRules];
+export const RULES: Rule[] = [...vscodeFileRules, ...pmConfigRules, ...gitConfigRules, ...textTrickRules, ...installScriptRules, ...sourceRules];
 
 export const RULE_FAILED = 'A detection rule failed; results may be incomplete';
 

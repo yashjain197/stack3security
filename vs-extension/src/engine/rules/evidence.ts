@@ -2,7 +2,7 @@ import type { Finding, Layer, ScanContext, Severity } from '../types';
 
 const MAX_EVIDENCE = 300;
 // C0/C1 controls, bidi embeddings/isolates/marks and zero-width characters: they can reorder or hide text in the UI.
-const UNSAFE_CHARS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩﻿]/g;
+const UNSAFE_CHARS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
 
 /** Untrusted text made fit to show: no control or bidi characters, bounded length (egress cap, I-11). */
 export function clip(text: string, max = MAX_EVIDENCE): string {

@@ -1,15 +1,14 @@
 import type { Finding, Rule, ScanContext, VirtualFile } from '../types';
 import { clip, finding } from './evidence';
+import { GENERATED } from './paths';
 
 const MAX_LINE = 2000;
 const MAX_SPACE_RUN = 200;
 
-// Minified, generated or data files legitimately have huge lines.
-const GENERATED = /\.min\.[a-z]+$|\.map$|\.svg$|\.lock$|(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|composer\.lock)$|(?:^|\/)(?:dist|build|out|vendor|third_party|node_modules|coverage|\.next|public)\//i;
 const SCRIPT = /\.(?:js|cjs|mjs|jsx|ts|cts|mts|tsx|sh|bash|zsh|ps1|bat|cmd|py|rb|pl|php|lua|ya?ml|toml|ini|cfg|conf|code-workspace)$/i;
 const CONFIG_NAME = /(?:^|\/)(?:\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|Makefile|Dockerfile|foundry\.toml|package\.json|tsconfig[^/]*\.json|jsconfig\.json|\.vscode\/[^/]+\.json|\.devcontainer\/(?:[^/]+\/)?devcontainer\.json|\.devcontainer\.json)$/;
 const PROSE = /\.(?:md|markdown|txt|rst|adoc|po|csv|tsv)$/i;
-const BIDI = /[‪-‮⁦-⁩]/;
+const BIDI = /[\u202A-\u202E\u2066-\u2069]/;
 
 const isLongLineCandidate = (p: string): boolean => !GENERATED.test(p) && (SCRIPT.test(p) || CONFIG_NAME.test(p));
 

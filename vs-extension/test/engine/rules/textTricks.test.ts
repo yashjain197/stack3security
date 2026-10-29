@@ -39,14 +39,14 @@ describe('text.long-line: hidden off-screen (spaces)', () => {
 });
 
 describe('text.bidi', () => {
-  test.each(['‪', '‫', '‬', '‭', '‮', '⁦', '⁧', '⁨', '⁩'])('U+%s in source → caution', (ch) => {
+  test.each(['\u202A', '\u202B', '\u202C', '\u202D', '\u202E', '\u2066', '\u2067', '\u2068', '\u2069'])('U+%s in source → caution', (ch) => {
     expect(ids([vf('src/a.ts', `const x = "a${ch}b";`)])).toEqual(['text.bidi:caution']);
   });
   test('plain ASCII and ordinary unicode → nothing', () => expect(ids([vf('src/a.ts', 'const s = "héllo wörld ✓ שלום";')])).toEqual([]));
-  test('prose files are not flagged', () => expect(ids([vf('README.md', 'مرحبا ‫ abc')])).toEqual([]));
+  test('prose files are not flagged', () => expect(ids([vf('README.md', 'مرحبا \u202B abc')])).toEqual([]));
   test('evidence names the code point without echoing the character', () => {
-    const [f] = run([vf('a.ts', 'x‮y')]);
+    const [f] = run([vf('a.ts', 'x\u202Ey')]);
     expect(f?.evidence).toContain('U+202E');
-    expect(f?.evidence).not.toContain('‮');
+    expect(f?.evidence).not.toContain('\u202E');
   });
 });
