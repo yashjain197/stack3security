@@ -1,0 +1,29 @@
+/* Colors come from the editor theme. The only fixed colors are severity accents. There is no all-clear color. */
+:root {
+  --sev-critical: #b3261e;
+  --sev-high: #c25b00;
+  --sev-caution: #b58900;
+  --sev-unknown: #6b7785;
+  --sev-none: #4f6d8f;
+}
+body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 16px 20px; line-height: 1.45; }
+h1 { font-size: 1.25rem; margin: 6px 0 2px; }
+h2 { font-size: 1rem; margin: 18px 0 6px; }
+.head { border-left: 6px solid var(--sev-none); padding: 4px 0 4px 14px; }
+.head.level-critical { border-color: var(--sev-critical); }
+.head.level-high { border-color: var(--sev-high); }
+.head.level-caution { border-color: var(--sev-caution); }
+.head.level-unknown { border-color: var(--sev-unknown); }
+.badge { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8rem; opacity: 0.9; }
+.target, .where, .muted { opacity: 0.75; margin: 2px 0; }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.btn { border: 1px solid var(--vscode-button-border, transparent); padding: 6px 12px; cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+.btn.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.findings { list-style: none; padding: 0; margin: 0; }
+.finding { border: 1px solid var(--vscode-panel-border, #8884); border-left-width: 5px; padding: 8px 10px; margin: 8px 0; }
+.finding.sev-critical { border-left-color: var(--sev-critical); }
+.finding.sev-high { border-left-color: var(--sev-high); }
+.finding.sev-caution { border-left-color: var(--sev-caution); }
+.sev { text-transform: uppercase; font-size: 0.72rem; font-weight: 700; margin-right: 8px; opacity: 0.85; }
+.evidence { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; font-family: var(--vscode-editor-font-family); font-size: 0.9em; }
+.prose { white-space: pre-wrap; }

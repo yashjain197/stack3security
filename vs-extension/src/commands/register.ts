@@ -1,12 +1,16 @@
 import * as vscode from 'vscode';
 import { createClient } from '../api/client';
 import { getSettings } from '../config/settings';
-import { clip } from '../engine/rules/evidence';
 import { cloneRepo } from '../quarantine/git';
 import { createQuarantineDir, validateRepoUrl } from '../quarantine/paths';
 import { Registry, type ScanRecord } from '../quarantine/registry';
 import { removeQuarantined, sweepQuarantine } from '../quarantine/remove';
 import { runScan } from '../scan/scheduler';
+import { NOTICE } from '../ui/copy';
+import type { ActionHandlers } from '../ui/bridge';
+import { showVerdictPanel } from '../ui/panel';
+import { parseQuarantinePath, quarantineUriPath, readQuarantined, SCHEME } from '../ui/quarantineFs';
+import { buildReport } from '../ui/view';
 import { cloneAndScan, type CloneAndScanDeps } from './cloneAndScan';
 
 export const CLONE_AND_SCAN = 'stack3.cloneAndScan';
@@ -20,40 +24,38 @@ export interface CommandOutcome {
 }
 const KEEP_DAYS = 7;
 
-/**
- * Stand-in result display until the verdict panel (Task 13). Everything shown comes from the repo, so it is
- * cleaned and bounded. Wording never claims a folder is safe, and nothing is styled as an all-clear.
- */
-export function summarize(rec: ScanRecord): { kind: 'error' | 'warning' | 'info'; text: string } {
-  const v = rec.verdict;
-  const repo = clip(v.target.id, 120);
-  const top = v.findings.find((f) => f.severity === v.level) ?? v.findings[0];
-  const detail = top ? ` Top finding: ${clip(top.title, 140)}${top.location ? ` (${clip(top.location.file, 100)}${top.location.line ? `:${top.location.line}` : ''})` : ''}.` : '';
-  const count = `${v.findings.length} finding${v.findings.length === 1 ? '' : 's'}`;
-  switch (v.level) {
-    case 'critical':
-      return { kind: 'error', text: `Stack3: Do not open ${repo} in VS Code. ${count}.${detail}` };
-    case 'high':
-      return { kind: 'warning', text: `Stack3: High risk in ${repo}. Open only with auto-run disabled. ${count}.${detail}` };
-    case 'caution':
-      return { kind: 'warning', text: `Stack3: Review ${repo} before running anything. ${count}.${detail}` };
-    case 'unknown':
-      return { kind: 'warning', text: `Stack3: ${repo} could not be checked fully (${clip(v.notChecked.join('; '), 160)}).${detail}` };
-    default:
-      return { kind: 'info', text: `Stack3: No known issues found in ${repo}. This is not a guarantee.` };
-  }
-}
-
-function showSummary(rec: ScanRecord): void {
-  const s = summarize(rec);
-  const show = s.kind === 'error' ? vscode.window.showErrorMessage : s.kind === 'warning' ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
-  void show(s.text);
-}
-
 export function registerCommands(context: vscode.ExtensionContext): void {
   // Housekeeping at startup: clones older than a week are deleted (S8).
   void sweepQuarantine(KEEP_DAYS).catch(() => undefined);
   void new Registry(context.globalState).pruneOlderThan(KEEP_DAYS).catch(() => undefined);
+
+  // Read-only viewer for files of a quarantined clone: contained, <= 1 MiB, plain text, never a workspace.
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(SCHEME, {
+      provideTextDocumentContent: async (uri) => {
+        const parsed = parseQuarantinePath(uri.path);
+        const rec = parsed ? new Registry(context.globalState).get(parsed.scanId) : undefined;
+        return parsed && rec ? readQuarantined(rec, parsed.rel) : NOTICE.fileUnavailable;
+      },
+    }),
+  );
+
+  const notYet = async () => void vscode.window.showInformationMessage(`Stack3: ${NOTICE.notAvailableYet}`);
+  const handlers: ActionHandlers = {
+    viewFile: async (rec, file) => {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.from({ scheme: SCHEME, path: quarantineUriPath(rec.scanId, file) }));
+      await vscode.languages.setTextDocumentLanguage(doc, 'plaintext');
+      await vscode.window.showTextDocument(doc, { preview: true });
+    },
+    copyReport: async (rec) => {
+      await vscode.env.clipboard.writeText(buildReport(rec));
+      void vscode.window.showInformationMessage(NOTICE.reportCopied);
+    },
+    // Opening and deleting are implemented in the next step. Until then the buttons say so instead of doing nothing.
+    open: notYet,
+    openNeutralized: notYet,
+    delete: notYet,
+  };
 
   context.subscriptions.push(
     vscode.commands.registerCommand(CLONE_AND_SCAN, async (arg?: unknown): Promise<CommandOutcome> => {
@@ -95,7 +97,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
           client,
           registry,
           removeDir: removeQuarantined,
-          showPanel: showSummary,
+          showPanel: (rec) => showVerdictPanel(context, rec, handlers),
           showError: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
           report: (m) => progress.report({ message: m }),
         };

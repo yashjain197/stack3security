@@ -33,6 +33,8 @@ export const __calls = {
   lastInputOptions: undefined as { validateInput?: (v: string) => string | undefined; ignoreFocusOut?: boolean } | undefined,
 };
 export function __reset(): void {
+  __panels.length = 0;
+  __docs.opened = []; __docs.shown = 0; __docs.language = []; __docs.clipboard = ''; __docs.warningAnswer = undefined; __docs.lastWarning = undefined; __docs.providers.clear();
   __calls.registered = [];
   __calls.handlers = new Map();
   __calls.errors = [];
@@ -66,3 +68,63 @@ export const window = {
     return task({ report: () => undefined });
   },
 };
+
+// ---- Uri, webview panel, documents, clipboard (Task 13) ----
+export class Uri {
+  constructor(public scheme: string, public path: string) {}
+  get fsPath(): string { return this.path; }
+  static file(p: string): Uri { return new Uri('file', p); }
+  static from(c: { scheme: string; path: string }): Uri { return new Uri(c.scheme, c.path); }
+  static joinPath(base: Uri, ...parts: string[]): Uri { return new Uri(base.scheme, [base.path.replace(/\/+$/, ''), ...parts].join('/')); }
+  toString(): string { return `${this.scheme}:${this.path}`; }
+}
+export const ViewColumn = { Active: -1, Beside: -2 } as const;
+
+export interface MockPanel {
+  viewType: string;
+  title: string;
+  options: Record<string, unknown>;
+  html: string;
+  posted: unknown[];
+  revealed: number;
+  disposed: boolean;
+  receive(raw: unknown): void;
+  dispose(): void;
+}
+export const __panels: MockPanel[] = [];
+export const __docs = { opened: [] as string[], shown: 0, language: [] as string[], clipboard: '' , warningAnswer: undefined as string | undefined, lastWarning: undefined as unknown[] | undefined, providers: new Map<string, { provideTextDocumentContent(uri: Uri): unknown }>() };
+
+(window as Record<string, unknown>).createWebviewPanel = ((viewType: string, title: string, _col: unknown, options: Record<string, unknown>) => {
+  let onMessage: (raw: unknown) => void = () => undefined;
+  let onDispose: () => void = () => undefined;
+  const panel: MockPanel = {
+    viewType, title, options, html: '', posted: [], revealed: 0, disposed: false,
+    receive: (raw) => onMessage(raw),
+    dispose: () => { panel.disposed = true; onDispose(); },
+  };
+  __panels.push(panel);
+  return {
+    webview: {
+      cspSource: 'vscode-webview://test',
+      asWebviewUri: (u: Uri) => new Uri('vscode-webview', u.path),
+      postMessage: async (m: unknown) => { panel.posted.push(m); return true; },
+      onDidReceiveMessage: (cb: (raw: unknown) => void) => { onMessage = cb; return { dispose: () => undefined }; },
+      set html(v: string) { panel.html = v; },
+      get html() { return panel.html; },
+    },
+    reveal: () => { panel.revealed++; },
+    onDidDispose: (cb: () => void) => { onDispose = cb; return { dispose: () => undefined }; },
+    dispose: panel.dispose,
+  };
+});
+
+(window as Record<string, unknown>).showWarningMessage = async (...args: unknown[]) => { __docs.lastWarning = args; if (typeof args[0] === 'string') __calls.warnings.push(args[0]); return __docs.warningAnswer; };
+(window as Record<string, unknown>).showTextDocument = async () => { __docs.shown++; };
+
+export const languages = { setTextDocumentLanguage: async (_d: unknown, id: string) => void __docs.language.push(id) };
+export const env = { clipboard: { writeText: async (t: string) => { __docs.clipboard = t; } } };
+(workspace as Record<string, unknown>).registerTextDocumentContentProvider = (scheme: string, provider: { provideTextDocumentContent(uri: Uri): unknown }) => {
+  __docs.providers.set(scheme, provider);
+  return { dispose: () => __docs.providers.delete(scheme) };
+};
+(workspace as Record<string, unknown>).openTextDocument = async (uri: Uri) => { __docs.opened.push(uri.toString()); return { uri }; };

@@ -5,5 +5,7 @@ const common = { mainFields: ['module', 'main'], bundle: true, minify: false, so
 
 await Promise.all([
   esbuild.build({ ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', platform: 'node', format: 'cjs', target: 'node18', external: ['vscode'] }),
+  // The verdict panel's page script and styles. Browser code: no Node, no vscode module.
+  esbuild.build({ ...common, entryPoints: ['webview/main.ts', 'webview/styles.css'], outdir: 'dist/webview', platform: 'browser', format: 'iife', target: 'es2022' }),
   esbuild.build({ ...common, entryPoints: ['src/scan/worker.ts'], outfile: 'dist/worker.js', platform: 'node', format: 'cjs', target: 'node18' }),
 ]);

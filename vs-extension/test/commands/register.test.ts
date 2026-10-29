@@ -36,7 +36,7 @@ describe('extension wiring', () => {
     const ctx = context();
     activate(ctx);
     expect(__calls.registered).toEqual(['stack3.cloneAndScan']);
-    expect(ctx.subscriptions).toHaveLength(1);
+    expect(ctx.subscriptions).toHaveLength(2); // the quarantine file viewer and the command
     expect(() => deactivate()).not.toThrow();
   });
   test('cancelling the input box does nothing: no progress, no error', async () => {
@@ -72,40 +72,5 @@ describe('extension wiring', () => {
   test('startup sweeps old quarantine folders without throwing when there is none', () => {
     expect(() => activate(context())).not.toThrow();
     vi.useRealTimers();
-  });
-});
-
-describe('summarize (stand-in for the verdict panel)', () => {
-  const BIDI = String.fromCharCode(0x202e);
-  const rec = (level: 'critical' | 'high' | 'caution' | 'unknown' | 'no_known_issues', title = 'Task runs a hidden command'): import('../../src/quarantine/registry').ScanRecord => ({
-    scanId: 'i', dir: '/q/d', url: 'https://github.com/o/r', sha: 'a'.repeat(40), scanSetHash: 'h', createdAt: 1,
-    verdict: {
-      level, target: { type: 'repo', id: 'github.com/o/r@aaaaaaa' }, indicators: { addresses: [], domains: [] }, actions: [],
-      notChecked: level === 'unknown' ? ['Package scan unavailable'] : [],
-      findings: level === 'no_known_issues' || level === 'unknown' ? [] : [{ ruleId: 'x', layer: 'repo-file', severity: level, title, evidence: 'e', location: { file: '.vscode/tasks.json', line: 14 }, source: 'rules', checkedAt: 't' }],
-    },
-  });
-  test.each([
-    ['critical', 'error', /Do not open/],
-    ['high', 'warning', /auto-run disabled/],
-    ['caution', 'warning', /Review/],
-    ['unknown', 'warning', /could not be checked fully/],
-    ['no_known_issues', 'info', /No known issues found.*not a guarantee/],
-  ] as const)('%s → %s', async (level, kind, text) => {
-    const { summarize } = await import('../../src/commands/register');
-    const s = summarize(rec(level));
-    expect(s.kind).toBe(kind);
-    expect(s.text).toMatch(text);
-  });
-  test('never says "safe", for any level', async () => {
-    const { summarize } = await import('../../src/commands/register');
-    for (const l of ['critical', 'high', 'caution', 'unknown', 'no_known_issues'] as const) expect(summarize(rec(l)).text).not.toMatch(/\bsafe\b/i);
-  });
-  test('names the top finding with its file and line, and cleans repo-supplied text', async () => {
-    const { summarize } = await import('../../src/commands/register');
-    const s = summarize(rec('critical', `Run${BIDI} this${'x'.repeat(500)}`));
-    expect(s.text).toContain('.vscode/tasks.json:14');
-    expect(s.text).not.toContain(BIDI);
-    expect(s.text.length).toBeLessThan(600);
   });
 });

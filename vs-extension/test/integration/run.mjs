@@ -1,7 +1,8 @@
 // Starts a real VS Code with this extension loaded, in a throwaway profile, runs suite.cjs inside its extension
 // host, and prints the result. Needs a display (it opens a short-lived window) and `npm run build` first.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { build } from 'esbuild';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,9 +30,29 @@ const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.st
 env.STACK3_RESULT = result;
 env.TMPDIR = tmpForExt; // the extension's quarantine folder lands here, not in the real /tmp
 
+// `node run.mjs` runs suite.cjs against the real extension. `node run.mjs webview-xss` runs webview-xss.cjs against a
+// test-only extension that opens the real verdict panel with hostile text.
+const suite = process.argv[2] ?? 'suite';
+if (!/^[a-z0-9-]+$/.test(suite) || !existsSync(join(here, `${suite}.cjs`))) {
+  console.error(`Unknown suite "${suite}".`);
+  process.exit(2);
+}
+let devPath = extensionRoot;
+if (suite === 'webview-xss') {
+  devPath = join(scratch, 'xss-ext');
+  mkdirSync(devPath);
+  await build({ entryPoints: [join(here, 'xss-ext/entry.ts')], outfile: join(devPath, 'extension.js'), bundle: true, platform: 'node', format: 'cjs', external: ['vscode'], mainFields: ['module', 'main'], logLevel: 'silent' });
+  writeFileSync(join(devPath, 'package.json'), JSON.stringify({ name: 'stack3-test', publisher: 'stack3test', version: '0.0.0', engines: { vscode: '^1.90.0' }, main: './extension.js', activationEvents: ['onStartupFinished'], contributes: { commands: [{ command: 'stack3test.showHostile', title: 'Stack3 test: show hostile verdict' }] } }));
+  env.STACK3_WEBVIEW_ROOT = join(extensionRoot, 'dist/webview');
+  if (!existsSync(join(env.STACK3_WEBVIEW_ROOT, 'main.js'))) {
+    console.error('dist/webview is missing. Run `npm run build` first.');
+    process.exit(2);
+  }
+}
+
 const args = [
-  `--extensionDevelopmentPath=${extensionRoot}`,
-  `--extensionTestsPath=${join(here, 'suite.cjs')}`,
+  `--extensionDevelopmentPath=${devPath}`,
+  `--extensionTestsPath=${join(here, `${suite}.cjs`)}`,
   `--user-data-dir=${join(scratch, 'user-data')}`,
   `--extensions-dir=${join(scratch, 'extensions')}`,
   '--disable-extensions', '--disable-workspace-trust', '--disable-gpu', '--no-sandbox', '--skip-welcome', '--skip-release-notes',
