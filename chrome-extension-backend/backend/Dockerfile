@@ -18,6 +18,7 @@ RUN groupadd --system app && useradd --system --gid app --home /srv app
 WORKDIR /srv
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app app ./app
+COPY --chown=app:app graph ./graph
 COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app alembic.ini docker-entrypoint.sh ./
 RUN chmod 0555 docker-entrypoint.sh && mkdir -p /srv/.dev-keys && chown app:app /srv/.dev-keys && chmod 0700 /srv/.dev-keys

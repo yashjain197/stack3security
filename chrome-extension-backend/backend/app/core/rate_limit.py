@@ -106,3 +106,5 @@ class Limits:
     LINK_APPROVE_USER = Limit("link_approve_user", 10, 600)
     BILLING_USER = Limit("billing_user", 20, 600)
     TEAM_INVITE_USER = Limit("team_invite_user", 30, 3600)
+    GRAPH_REPORT_USER = Limit("graph_report_user", 30, 3600)
+    GRAPH_READ_USER = Limit("graph_read_user", 120, 600)

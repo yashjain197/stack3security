@@ -1,0 +1,18 @@
+CREATE GRAPH stack3 ()
+USE GRAPH stack3
+CREATE SCHEMA_CHANGE JOB stack3_init FOR GRAPH stack3 {
+  ADD VERTEX Wallet (PRIMARY_ID id STRING, chain_id INT, risk STRING, category STRING, label STRING, report_count UINT, first_seen DATETIME, last_seen DATETIME);
+  ADD VERTEX Domain (PRIMARY_ID id STRING, risk STRING, category STRING, impersonates STRING, report_count UINT, first_seen DATETIME, last_seen DATETIME);
+  ADD VERTEX SoftwarePackage (PRIMARY_ID id STRING, ecosystem STRING, pkg_name STRING, pkg_version STRING, risk STRING, category STRING, report_count UINT, first_seen DATETIME, last_seen DATETIME);
+  ADD VERTEX Repo (PRIMARY_ID id STRING, risk STRING, category STRING, report_count UINT, first_seen DATETIME, last_seen DATETIME);
+  ADD VERTEX Endpoint (PRIMARY_ID id STRING, host STRING, risk STRING, category STRING, report_count UINT, first_seen DATETIME, last_seen DATETIME);
+  ADD DIRECTED EDGE PACKAGE_DRAINS_TO (FROM SoftwarePackage, TO Wallet, first_seen DATETIME) WITH REVERSE_EDGE="WALLET_DRAINED_BY_PACKAGE";
+  ADD DIRECTED EDGE DOMAIN_DRAINS_TO (FROM Domain, TO Wallet, first_seen DATETIME) WITH REVERSE_EDGE="WALLET_DRAINED_BY_DOMAIN";
+  ADD DIRECTED EDGE PACKAGE_SENDS_TO (FROM SoftwarePackage, TO Endpoint, first_seen DATETIME) WITH REVERSE_EDGE="ENDPOINT_FED_BY_PACKAGE";
+  ADD DIRECTED EDGE DOMAIN_SENDS_TO (FROM Domain, TO Endpoint, first_seen DATETIME) WITH REVERSE_EDGE="ENDPOINT_FED_BY_DOMAIN";
+  ADD DIRECTED EDGE LOADS_SCRIPT (FROM Domain, TO SoftwarePackage, first_seen DATETIME) WITH REVERSE_EDGE="SCRIPT_LOADED_BY";
+  ADD DIRECTED EDGE DEPENDS_ON (FROM Repo, TO SoftwarePackage, first_seen DATETIME) WITH REVERSE_EDGE="DEPENDED_ON_BY";
+  ADD DIRECTED EDGE FUNDED (FROM Wallet, TO Wallet, tx_hash STRING, first_seen DATETIME) WITH REVERSE_EDGE="FUNDED_BY";
+}
+RUN SCHEMA_CHANGE JOB stack3_init
+DROP JOB stack3_init

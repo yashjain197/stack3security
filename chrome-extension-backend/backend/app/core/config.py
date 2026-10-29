@@ -82,6 +82,16 @@ class Settings(BaseSettings):
     dodo_addon_team_seat_monthly: str | None = None
     dodo_addon_team_seat_yearly: str | None = None
 
+    # TigerGraph Savanna: in-database user for schema/setup (GSQL), secret for REST++ queries and upserts
+    tigergraph_host: str | None = None
+    tigergraph_graph: str = "stack3"
+    tigergraph_username: str | None = None
+    tigergraph_password: SecretStr | None = None
+    tigergraph_secret: SecretStr | None = None
+    # Savanna control-plane key (admin scripts only, never used by the running API)
+    tigergraph_api_key: SecretStr | None = None
+    graph_sync_interval_seconds: int = 15
+
     internal_service_key: SecretStr = SecretStr("dev-only-internal-key-change-me-0123456789")
 
     @property
@@ -98,6 +108,11 @@ class Settings(BaseSettings):
     def allowed_origins(self) -> list[str]:
         """Website origins plus every registered Chrome extension origin."""
         return [*self.cors_origins, *(f"chrome-extension://{ext_id}" for ext_id in self.chrome_extension_ids)]
+
+    @property
+    def tigergraph_configured(self) -> bool:
+        """True when the threat graph can be reached: host plus the runtime secret."""
+        return bool(self.tigergraph_host and self.tigergraph_secret)
 
     @property
     def dodo_base_url(self) -> str:
@@ -121,6 +136,11 @@ class Settings(BaseSettings):
         "dodo_product_team_yearly",
         "dodo_addon_team_seat_monthly",
         "dodo_addon_team_seat_yearly",
+        "tigergraph_host",
+        "tigergraph_username",
+        "tigergraph_password",
+        "tigergraph_secret",
+        "tigergraph_api_key",
         mode="before",
     )
     @classmethod
