@@ -2,7 +2,7 @@
 // host, and prints the result. Needs a display (it opens a short-lived window) and `npm run build` first.
 import { spawn } from 'node:child_process';
 import { build } from 'esbuild';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,9 @@ if (!existsSync(join(extensionRoot, 'dist/extension.js'))) {
 }
 
 const scratch = mkdtempSync(join(tmpdir(), 'stack3-it-'));
+// The window opens a scratch COPY of the workspace, so tests can create and delete files without touching the repo.
+const workspaceDir = join(scratch, 'workspace');
+cpSync(join(here, 'workspace'), workspaceDir, { recursive: true });
 const result = join(scratch, 'result.json');
 const tmpForExt = join(scratch, 'tmp');
 mkdirSync(tmpForExt);
@@ -58,7 +61,7 @@ const args = [
   `--user-data-dir=${join(scratch, 'user-data')}`,
   `--extensions-dir=${join(scratch, 'extensions')}`,
   '--disable-extensions', '--disable-workspace-trust', '--disable-gpu', '--no-sandbox', '--skip-welcome', '--skip-release-notes',
-  join(here, 'workspace'),
+  workspaceDir,
 ];
 console.log(`VS Code: ${exe}\nprofile: ${scratch}\n`);
 // Folders the test asks to have opened (see xss-ext/entry.ts). Each is opened in its OWN VS Code instance and profile,

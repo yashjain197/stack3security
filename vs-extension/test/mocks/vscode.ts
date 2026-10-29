@@ -42,6 +42,7 @@ export const __calls = {
   lastInputOptions: undefined as { validateInput?: (v: string) => string | undefined; ignoreFocusOut?: boolean } | undefined,
 };
 export function __reset(): void {
+  __resetGuardIfDefined();
   __config.updates = [];
   __config.failUpdate = false;
   __panels.length = 0;
@@ -144,3 +145,79 @@ export const env = { clipboard: { writeText: async (t: string) => { __docs.clipb
   return { dispose: () => __docs.providers.delete(scheme) };
 };
 (workspace as Record<string, unknown>).openTextDocument = async (uri: Uri) => { __docs.opened.push(uri.toString()); return { uri }; };
+
+// ---- diagnostics, status bar, file watchers, git extension (Task 15) ----
+export const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 } as const;
+export class Range {
+  start: { line: number; character: number };
+  end: { line: number; character: number };
+  constructor(startLine: number, startCharacter: number, endLine: number, endCharacter: number) {
+    this.start = { line: startLine, character: startCharacter };
+    this.end = { line: endLine, character: endCharacter };
+  }
+}
+export class Diagnostic {
+  source?: string;
+  code?: string | number;
+  constructor(public range: Range, public message: string, public severity: number) {}
+}
+export const StatusBarAlignment = { Left: 1, Right: 2 } as const;
+export class ThemeColor {
+  constructor(public id: string) {}
+}
+export class RelativePattern {
+  constructor(public base: Uri, public pattern: string) {}
+}
+(Uri as unknown as { parse: (s: string) => Uri }).parse = (s: string) => {
+  const i = s.indexOf(':');
+  return new Uri(s.slice(0, i), s.slice(i + 1));
+};
+
+export const __guard = {
+  collections: [] as { name: string; store: Map<string, Diagnostic[]>; disposed: boolean }[],
+  statusItems: [] as { text: string; tooltip?: string; backgroundColor?: ThemeColor; visible: boolean; command?: string; disposed: boolean }[],
+  watchers: [] as { pattern: RelativePattern; fire(kind: 'create' | 'change' | 'delete', fsPath: string): void; disposed: boolean }[],
+  folders: undefined as { uri: Uri; name: string }[] | undefined,
+  trusted: true,
+  gitExtension: undefined as unknown,
+};
+export function __resetGuard(): void {
+  __guard.collections = [];
+  __guard.statusItems = [];
+  __guard.watchers = [];
+  __guard.folders = undefined;
+  __guard.trusted = true;
+  __guard.gitExtension = undefined;
+}
+
+(languages as Record<string, unknown>).createDiagnosticCollection = (name: string) => {
+  const c = { name, store: new Map<string, Diagnostic[]>(), disposed: false };
+  __guard.collections.push(c);
+  return {
+    set: (uri: Uri, d: Diagnostic[]) => void c.store.set(uri.toString(), d),
+    delete: (uri: Uri) => void c.store.delete(uri.toString()),
+    clear: () => c.store.clear(),
+    dispose: () => { c.disposed = true; },
+  };
+};
+(window as Record<string, unknown>).createStatusBarItem = () => {
+  const item = { text: '', tooltip: undefined as string | undefined, backgroundColor: undefined as ThemeColor | undefined, visible: false, command: undefined as string | undefined, disposed: false };
+  __guard.statusItems.push(item);
+  return Object.assign(item, { show: () => { item.visible = true; }, hide: () => { item.visible = false; }, dispose: () => { item.disposed = true; } });
+};
+Object.defineProperty(workspace, 'workspaceFolders', { get: () => __guard.folders, configurable: true });
+Object.defineProperty(workspace, 'isTrusted', { get: () => __guard.trusted, configurable: true });
+(workspace as Record<string, unknown>).onDidChangeWorkspaceFolders = () => ({ dispose: () => undefined });
+(workspace as Record<string, unknown>).onDidGrantWorkspaceTrust = () => ({ dispose: () => undefined });
+(workspace as Record<string, unknown>).createFileSystemWatcher = (pattern: RelativePattern) => {
+  const handlers = { create: [] as ((u: Uri) => void)[], change: [] as ((u: Uri) => void)[], delete: [] as ((u: Uri) => void)[] };
+  const w = { pattern, disposed: false, fire: (kind: 'create' | 'change' | 'delete', fsPath: string) => handlers[kind].forEach((h) => h(Uri.file(fsPath))) };
+  __guard.watchers.push(w);
+  const on = (k: keyof typeof handlers) => (cb: (u: Uri) => void) => { handlers[k].push(cb); return { dispose: () => undefined }; };
+  return { onDidCreate: on('create'), onDidChange: on('change'), onDidDelete: on('delete'), dispose: () => { w.disposed = true; } };
+};
+export const extensions = { getExtension: (id: string) => (id === 'vscode.git' ? __guard.gitExtension : undefined) };
+
+function __resetGuardIfDefined(): void {
+  if (typeof __resetGuard === 'function') __resetGuard();
+}

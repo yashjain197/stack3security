@@ -15,6 +15,7 @@ import { resolveQuarantineDir } from '../quarantine/remove';
 import { hashScanSet } from '../scan/hash';
 import { maybeOfferAutoTaskGuard } from '../guard/autoTasks';
 import { closePanel } from '../ui/panel';
+import { registerGuard } from '../guard';
 import { cloneAndScan, rescanRecord, type CloneAndScanDeps } from './cloneAndScan';
 import { createActionHandlers } from './actions';
 
@@ -33,6 +34,9 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   // Housekeeping at startup: clones older than a week are deleted (S8).
   void sweepQuarantine(KEEP_DAYS, Date.now(), new Registry(context.globalState).openedDirs()).catch(() => undefined);
   void new Registry(context.globalState).pruneOlderThan(KEEP_DAYS).catch(() => undefined);
+
+  // Flow 3: keep watching the open folders (manifest and config changes), with diagnostics and a status bar item.
+  registerGuard(context);
 
   // Read-only viewer for files of a quarantined clone: contained, <= 1 MiB, plain text, never a workspace.
   context.subscriptions.push(

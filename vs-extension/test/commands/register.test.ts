@@ -36,7 +36,8 @@ describe('extension wiring', () => {
     const ctx = context();
     activate(ctx);
     expect(__calls.registered).toEqual(['stack3.cloneAndScan']);
-    expect(ctx.subscriptions).toHaveLength(2); // the quarantine file viewer and the command
+    // the guard (collection, status bar, watchers, staged-secret warning), the quarantine file viewer, and the command
+    expect(ctx.subscriptions.length).toBeGreaterThanOrEqual(6);
     expect(() => deactivate()).not.toThrow();
   });
   test('cancelling the input box does nothing: no progress, no error', async () => {
