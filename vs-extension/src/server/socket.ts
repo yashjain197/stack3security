@@ -10,6 +10,9 @@ export interface SocketOptions {
   fetchImpl?: typeof fetch;
   now?: () => number;
   timeoutMs?: number;
+  /** Extra tries after a rate limit (429) or a 502/503/504, waiting as long as Retry-After says (at most 5 s). Default 0. */
+  retries?: number;
+  sleep?: (ms: number) => Promise<void>;
 }
 
 const BASE = 'https://api.socket.dev/v0';
@@ -28,6 +31,9 @@ const CATEGORIES = new Set(['supplyChainRisk']);
 const UNRESOLVED = new Set(['pendingScan', 'notFound']);
 
 type Chunk = { ok: true; findings: Finding[]; unresolved: number } | { ok: false; reason: string };
+const RETRY_STATUS = new Set([429, 502, 503, 504]);
+const DEFAULT_WAIT_MS = 2000;
+const MAX_WAIT_MS = 5000;
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const identifier = (v: unknown, max: number): string => text(v).replace(/[^A-Za-z0-9._-]/g, '').slice(0, max);
@@ -41,10 +47,20 @@ export function createSocketScanner(opts: SocketOptions): (purls: string[]) => P
   const fetchImpl = opts.fetchImpl ?? fetch;
   const now = opts.now ?? Date.now;
   const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
+  const retries = Math.max(0, Math.min(opts.retries ?? 0, 3));
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const route = opts.orgSlug ? `/orgs/${encodeURIComponent(opts.orgSlug)}/purl` : '/purl';
   const url = `${BASE}${route}?alerts=true&purlErrors=true`;
 
   async function fetchChunk(purls: string[]): Promise<Chunk> {
+    for (let attempt = 0; ; attempt++) {
+      const { chunk, waitMs } = await tryChunk(purls);
+      if (waitMs === undefined || attempt >= retries) return chunk;
+      await sleep(waitMs);
+    }
+  }
+
+  async function tryChunk(purls: string[]): Promise<{ chunk: Chunk; waitMs?: number }> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
@@ -58,13 +74,15 @@ export function createSocketScanner(opts: SocketOptions): (purls: string[]) => P
       });
       if (!res.ok) {
         void res.body?.cancel().catch(() => undefined);
-        return { ok: false, reason: `Socket returned ${res.status}` };
+        const asked = Number(res.headers.get('retry-after'));
+        const waitMs = RETRY_STATUS.has(res.status) ? (Number.isFinite(asked) && asked >= 0 && res.headers.has('retry-after') ? Math.min(asked * 1000, MAX_WAIT_MS) : DEFAULT_WAIT_MS) : undefined;
+        return { chunk: { ok: false, reason: `Socket returned ${res.status}` }, ...(waitMs === undefined ? {} : { waitMs }) };
       }
       const bytes = await readCapped(res, ctl.signal, MAX_BODY);
-      if (bytes === 'too-large') return { ok: false, reason: 'Socket response too large' };
-      return parse(new TextDecoder().decode(bytes), purls.length);
+      if (bytes === 'too-large') return { chunk: { ok: false, reason: 'Socket response too large' } };
+      return { chunk: parse(new TextDecoder().decode(bytes), purls.length) };
     } catch {
-      return { ok: false, reason: ctl.signal.aborted ? 'Socket timed out' : 'Socket request failed' };
+      return { chunk: { ok: false, reason: ctl.signal.aborted ? 'Socket timed out' : 'Socket request failed' } };
     } finally {
       clearTimeout(timer);
     }

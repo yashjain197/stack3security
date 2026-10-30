@@ -1,6 +1,6 @@
 import type { Level } from '../engine/types';
 
-// Every user-facing string lives here or in webview/main.ts. None may claim safety (I-15), and nothing is styled green.
+// Every user-facing string lives here or in webview/main.ts. None may claim safety (I-15).
 
 export const LEVEL_LABEL: Record<Level, string> = {
   critical: 'Critical risk',
@@ -33,6 +33,11 @@ export const OPEN_ANYWAY = 'Open anyway';
 
 export const SECTION = {
   findings: 'Findings',
+  packages: 'Packages',
+  packageSearch: 'Search packages',
+  noMatchingPackages: 'No matching packages.',
+  packagesChecked: (n: number) => `${n} package${n === 1 ? '' : 's'} scanned`,
+  noPackages: 'No npm packages with exact versions were found in this repository.',
   notChecked: 'Not checked',
   guidance: 'What to do',
   noFindings: 'No findings.',

@@ -1,42 +1,74 @@
-/* Colors come from the editor theme. The only fixed colors are severity accents. There is no all-clear color. */
+/* Colors come from the editor theme. Fixed colors are severity accents plus the package-ok marker. */
 :root {
   --sev-critical: #d32f2f;
   --sev-high: #e07000;
   --sev-caution: #c99a00;
   --sev-unknown: #6b7785;
   --sev-none: #4f6d8f;
+  --pkg-ok: #2e7d32;
   --accent: var(--sev-none);
   --border: var(--vscode-panel-border, #8884);
   --card: color-mix(in srgb, var(--vscode-foreground) 5%, var(--vscode-editor-background));
   --radius: 8px;
+  --pad-x: clamp(12px, 2.6vw, 28px);
+  --pad-y: clamp(12px, 2.2vh, 32px);
+  --gap: clamp(8px, 1.4vw, 14px);
+  --app-max: min(72rem, 100%);
+  --pkg-list-max: min(52dvh, 560px);
 }
 
 * { box-sizing: border-box; }
+html {
+  width: 100%;
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body {
   font-family: var(--vscode-font-family);
   color: var(--vscode-foreground);
   background: var(--vscode-editor-background);
   margin: 0;
-  padding: 24px 20px 40px;
+  padding: var(--pad-y) var(--pad-x) calc(var(--pad-y) * 1.35);
   line-height: 1.5;
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-wrap: break-word;
 }
-#app { max-width: 860px; margin: 0 auto; }
+#app {
+  width: 100%;
+  max-width: var(--app-max);
+  margin: 0 auto;
+  min-width: 0;
+}
 
-h1 { font-size: 1.45rem; line-height: 1.25; margin: 10px 0 6px; font-weight: 650; }
+h1 {
+  font-size: clamp(1.12rem, 0.85rem + 1.4vw, 1.55rem);
+  line-height: 1.25;
+  margin: 10px 0 6px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
 h2 {
-  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-  opacity: 0.7; margin: 28px 0 10px;
+  font-size: clamp(0.7rem, 0.62rem + 0.3vw, 0.78rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin: clamp(16px, 3vh, 28px) 0 10px;
 }
 
 /* ---- Verdict header ---- */
 .head {
   --accent: var(--sev-none);
   position: relative;
-  padding: 18px 20px 16px 24px;
+  padding: clamp(12px, 1.8vw, 20px) clamp(12px, 2vw, 22px) clamp(12px, 1.6vw, 16px) clamp(16px, 2.4vw, 28px);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: var(--radius);
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--vscode-editor-background)), var(--card));
   overflow: hidden;
+  min-width: 0;
 }
 .head::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 6px; background: var(--accent); }
 .head.level-critical { --accent: var(--sev-critical); }
@@ -46,20 +78,24 @@ h2 {
 
 .badge {
   display: inline-block;
+  max-width: 100%;
   padding: 2px 10px;
   border-radius: 999px;
   font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
   color: #fff;
   background: var(--accent);
+  overflow-wrap: anywhere;
 }
 .target {
-  display: inline-block;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
   margin: 4px 0 0;
   padding: 2px 8px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
   font-family: var(--vscode-editor-font-family);
-  font-size: 0.85rem;
+  font-size: clamp(0.78rem, 0.7rem + 0.3vw, 0.85rem);
   overflow-wrap: anywhere;
 }
 
@@ -68,19 +104,21 @@ h2 {
 .chip {
   --accent: var(--sev-unknown);
   display: inline-flex; align-items: center; gap: 6px;
+  max-width: 100%;
   padding: 2px 10px;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   font-size: 0.8rem; font-weight: 600;
+  overflow-wrap: anywhere;
 }
-.chip::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.chip::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 .chip.sev-critical { --accent: var(--sev-critical); }
 .chip.sev-high { --accent: var(--sev-high); }
 .chip.sev-caution { --accent: var(--sev-caution); }
 
 /* ---- Buttons ---- */
-.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 4px; }
+.buttons { display: flex; flex-wrap: wrap; gap: var(--gap); margin: 18px 0 4px; }
 .btn {
   border: 1px solid var(--vscode-button-border, transparent);
   border-radius: 6px;
@@ -90,6 +128,9 @@ h2 {
   background: var(--vscode-button-secondaryBackground);
   color: var(--vscode-button-secondaryForeground);
   transition: filter 0.12s ease, transform 0.12s ease;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 .btn:hover { filter: brightness(1.12); }
 .btn:active { transform: translateY(1px); }
@@ -103,16 +144,17 @@ h2 {
 .findings { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .finding {
   --accent: var(--sev-unknown);
-  padding: 12px 14px 12px 16px;
+  padding: clamp(10px, 1.4vw, 14px) clamp(10px, 1.6vw, 16px);
   border: 1px solid var(--border);
   border-left: 4px solid var(--accent);
   border-radius: var(--radius);
   background: var(--card);
+  min-width: 0;
 }
 .finding.sev-critical { --accent: var(--sev-critical); }
 .finding.sev-high { --accent: var(--sev-high); }
 .finding.sev-caution { --accent: var(--sev-caution); }
-.finding .title { font-weight: 650; }
+.finding .title { font-weight: 650; overflow-wrap: anywhere; }
 .sev {
   display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px;
   text-transform: uppercase; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em;
@@ -130,38 +172,147 @@ h2 {
   padding: 8px 10px;
   border-radius: 6px;
   background: var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--vscode-foreground) 8%, transparent));
-  font-family: var(--vscode-editor-font-family); font-size: 0.85rem;
+  font-family: var(--vscode-editor-font-family); font-size: clamp(0.78rem, 0.72rem + 0.25vw, 0.85rem);
+  max-width: 100%;
 }
-.muted { opacity: 0.75; margin: 4px 0; }
-.prose { white-space: pre-wrap; margin: 6px 0; }
+.muted { opacity: 0.75; margin: 4px 0; overflow-wrap: anywhere; }
+.prose { white-space: pre-wrap; margin: 6px 0; overflow-wrap: anywhere; }
 
 /* ---- Explanation ---- */
 .explanation {
-  margin-top: 22px;
-  padding: 4px 16px 14px;
+  margin-top: clamp(14px, 2.4vh, 22px);
+  padding: 4px clamp(12px, 1.8vw, 16px) 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
+  min-width: 0;
 }
 .explanation h2 { margin-top: 12px; }
 .label {
   display: inline-block;
+  max-width: 100%;
   font-size: 0.8rem;
   padding: 2px 10px;
   border-radius: 999px;
   border: 1px dashed var(--sev-unknown);
   opacity: 0.9;
   margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Packages ---- */
+.packages-panel {
+  margin-top: clamp(12px, 2vh, 18px);
+  padding: 4px clamp(12px, 1.8vw, 16px) 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  min-width: 0;
+}
+.packages-panel h2 { margin-top: 12px; }
+.pkg-search {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--vscode-input-background, var(--card));
+  color: var(--vscode-input-foreground, inherit);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.pkg-search:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.packages {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  max-height: 42vh;
+  max-height: var(--pkg-list-max);
+  overflow: auto;
+}
+.package {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: clamp(8px, 1.2vw, 12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  min-width: 0;
+}
+.package .dot {
+  display: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--pkg-ok);
+}
+.package.ok .dot { display: block; }
+.package.flagged {
+  --accent: var(--sev-critical);
+  border-color: color-mix(in srgb, var(--sev-critical) 55%, transparent);
+  border-left: 4px solid var(--sev-critical);
+  background: color-mix(in srgb, var(--sev-critical) 16%, var(--vscode-editor-background));
+}
+.package .pkg-body { min-width: 0; flex: 1; }
+.package .pkg {
+  font-family: var(--vscode-editor-font-family);
+  font-size: clamp(0.8rem, 0.74rem + 0.25vw, 0.88rem);
+  overflow-wrap: anywhere;
 }
 
 /* ---- Not checked ---- */
 section > ul { margin: 0; padding-left: 20px; }
-section > ul li { margin: 4px 0; opacity: 0.85; }
+section > ul li { margin: 4px 0; opacity: 0.85; overflow-wrap: anywhere; }
 
 @media (prefers-reduced-motion: reduce) {
   .btn { transition: none; }
 }
+
+/* Split editor / compact laptop panel */
+@media (max-width: 720px) {
+  .buttons > .btn { flex: 1 1 calc(50% - var(--gap)); }
+}
+
+/* Narrow sidebar or stacked split */
 @media (max-width: 480px) {
-  body { padding: 14px 12px 28px; }
-  .btn { flex: 1 1 100%; }
+  :root { --pad-x: 12px; --pad-y: 14px; }
+  .buttons > .btn { flex: 1 1 100%; }
+  .head { padding-left: 16px; }
+  .head::before { width: 4px; }
+  h2 { letter-spacing: 0.05em; }
+}
+
+/* Short laptop height: keep the package list from dominating the page */
+@media (max-height: 700px) {
+  :root { --pkg-list-max: min(38dvh, 320px); }
+}
+@media (max-height: 500px) {
+  :root { --pkg-list-max: min(30dvh, 220px); }
+  h2 { margin-top: 12px; }
+}
+
+/* Typical 14–16" full-width editor */
+@media (min-width: 720px) {
+  .packages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .package.flagged { grid-column: 1 / -1; }
+}
+
+/* Large / ultrawide monitors */
+@media (min-width: 1100px) {
+  :root { --app-max: min(86rem, 100%); }
+  .packages { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1600px) {
+  :root { --app-max: min(96rem, 100%); }
+  .packages { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

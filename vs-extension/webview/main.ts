@@ -59,27 +59,71 @@ function reportRendered(scanId: string): void {
   });
 }
 
-function render(scanId: string, view: ViewModel): void {
+function render(scanId: string, raw: ViewModel): void {
+  const packages = Array.isArray(raw.packages) ? raw.packages : [];
+  const findings = Array.isArray(raw.findings) ? raw.findings : [];
+  const buttons = Array.isArray(raw.buttons) ? raw.buttons : [];
+  const notChecked = Array.isArray(raw.notChecked) ? raw.notChecked : [];
+  const packagesScanned = typeof raw.packagesScanned === 'number' ? raw.packagesScanned : packages.length;
+  const hiddenPackages = typeof raw.hiddenPackages === 'number' ? raw.hiddenPackages : 0;
+  const hiddenFindings = typeof raw.hiddenFindings === 'number' ? raw.hiddenFindings : 0;
   const act = (action: string, file?: string) => vscode.postMessage({ type: 'action', scanId, action, ...(file ? { file } : {}) });
   app.replaceChildren();
 
-  const head = el('header', `head level-${view.level}`);
-  head.append(el('span', 'badge', view.label), el('h1', undefined, view.headline), el('p', 'target', view.target));
+  const head = el('header', `head level-${raw.level}`);
+  head.append(el('span', 'badge', raw.label), el('h1', undefined, raw.headline), el('p', 'target', raw.target));
   const counts = new Map<string, number>();
-  for (const f of view.findings) counts.set(f.severity, (counts.get(f.severity) ?? 0) + 1);
-  if (counts.size > 0) {
-    const summary = el('div', 'summary');
-    for (const sev of ['critical', 'high', 'caution']) {
-      const n = counts.get(sev);
-      if (n) summary.append(el('span', `chip sev-${sev}`, `${n} ${sev}`));
-    }
-    head.append(summary);
+  for (const f of findings) counts.set(f.severity, (counts.get(f.severity) ?? 0) + 1);
+  const summary = el('div', 'summary');
+  summary.append(el('span', 'chip', `${packagesScanned} package${packagesScanned === 1 ? '' : 's'} scanned`));
+  for (const sev of ['critical', 'high', 'caution']) {
+    const n = counts.get(sev);
+    if (n) summary.append(el('span', `chip sev-${sev}`, `${n} ${sev}`));
   }
+  head.append(summary);
   app.append(head);
 
   const bar = el('div', 'buttons');
-  for (const b of view.buttons) bar.append(button(b.label, b.primary, () => act(b.action), b.action === 'delete' ? 'danger' : ''));
+  for (const b of buttons) bar.append(button(b.label, b.primary, () => act(b.action), b.action === 'delete' ? 'danger' : ''));
   app.append(bar);
+
+  // Packages sit above Findings so a clean scan still shows the search list without scrolling.
+  const pkgs = section('Packages');
+  pkgs.className = 'packages-panel';
+  pkgs.append(el('p', 'muted', `${packagesScanned} package${packagesScanned === 1 ? '' : 's'} scanned`));
+  if (packages.length === 0) {
+    pkgs.append(el('p', 'muted', 'No npm packages with exact versions were found in this repository.'));
+  } else {
+    const q = document.createElement('input');
+    q.type = 'search';
+    q.className = 'pkg-search';
+    q.placeholder = 'Search packages';
+    q.setAttribute('aria-label', 'Search packages');
+    const listPkgs = el('ul', 'packages');
+    const none = el('p', 'muted', 'No matching packages.');
+    const draw = () => {
+      const needle = q.value.trim().toLowerCase();
+      listPkgs.replaceChildren();
+      const hits = packages
+        .filter((p) => !needle || p.label.toLowerCase().includes(needle) || p.purl.toLowerCase().includes(needle))
+        .sort((a, b) => Number(Boolean(b.flagged)) - Number(Boolean(a.flagged)));
+      none.hidden = hits.length > 0;
+      for (const p of hits) {
+        const li = el('li', p.flagged ? 'package flagged' : 'package ok');
+        const body = el('div', 'pkg-body');
+        body.append(el('code', 'pkg', p.label));
+        if (p.file) body.append(el('div', 'where', p.file));
+        if (p.canView && p.file) body.append(button('View file', false, () => act('viewFile', p.file), 'small'));
+        li.append(el('span', 'dot'), body);
+        listPkgs.append(li);
+      }
+    };
+    q.addEventListener('input', draw);
+    pkgs.append(q, listPkgs, none);
+    if (hiddenPackages > 0) pkgs.append(el('p', 'muted', `${hiddenPackages} more packages not shown. Copy the report for the full list.`));
+    draw();
+  }
+  app.append(pkgs);
 
   // The AI explanation sits under the verdict and is filled in when (and if) it arrives. Text only, never markup.
   const box = el('section', 'explanation');
@@ -88,10 +132,10 @@ function render(scanId: string, view: ViewModel): void {
   currentScanId = scanId;
   renderExplanation();
 
-  const findings = section('Findings');
-  if (view.findings.length === 0) findings.append(el('p', 'muted', 'No findings.'));
+  const findingsBox = section('Findings');
+  if (findings.length === 0) findingsBox.append(el('p', 'muted', 'No findings.'));
   const list = el('ul', 'findings');
-  for (const f of view.findings) {
+  for (const f of findings) {
     const li = el('li', `finding sev-${f.severity}`);
     li.append(el('span', 'sev', f.severity), el('strong', 'title', f.title));
     if (f.file) li.append(el('div', 'where', f.line ? `${f.file}:${f.line}` : f.file));
@@ -99,14 +143,14 @@ function render(scanId: string, view: ViewModel): void {
     if (f.canView && f.file) li.append(button('View file', false, () => act('viewFile', f.file), 'small'));
     list.append(li);
   }
-  findings.append(list);
-  if (view.hiddenFindings > 0) findings.append(el('p', 'muted', `${view.hiddenFindings} more finding${view.hiddenFindings === 1 ? '' : 's'} not shown. Copy the report for the full list.`));
-  app.append(findings);
+  findingsBox.append(list);
+  if (hiddenFindings > 0) findingsBox.append(el('p', 'muted', `${hiddenFindings} more finding${hiddenFindings === 1 ? '' : 's'} not shown. Copy the report for the full list.`));
+  app.append(findingsBox);
 
-  if (view.notChecked.length > 0) {
+  if (notChecked.length > 0) {
     const s = section('Not checked');
     const ul = el('ul');
-    for (const n of view.notChecked) ul.append(el('li', undefined, n));
+    for (const n of notChecked) ul.append(el('li', undefined, n));
     s.append(ul);
     app.append(s);
   }

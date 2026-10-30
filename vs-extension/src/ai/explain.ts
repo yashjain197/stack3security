@@ -25,8 +25,8 @@ const REASSURANCE = [
 export const contradictsVerdict = (text: string): boolean => REASSURANCE.some((re) => re.test(text));
 
 export interface ExplainDeps {
-  settings(): Pick<Stack3Settings, 'explainMode' | 'explainProvider' | 'ollamaModel'>;
-  providers: { ollama(model: string): ExplainProvider; api(): ExplainProvider };
+  settings(): Pick<Stack3Settings, 'explainMode' | 'explainProvider'>;
+  providers: { claude(): ExplainProvider; api(): ExplainProvider };
   post(scanId: string, msg: ExplanationMessage): void;
 }
 
@@ -37,15 +37,33 @@ const isPublicSource = (rec: ScanRecord): boolean => /^https:\/\/github\.com\//.
  * Ask a provider to explain a verdict, and tell the panel what came back. Never throws, never touches the verdict:
  * the explanation is text beside the result, decided by rules (I-4).
  *
- * D-5: snippets go to a provider only as the user allows. A model on this computer sends nothing anywhere, so
- * `publicOnly` does not hold it back, but `never` still turns every explanation off.
+ * D-5: snippets go to a provider only as the user allows. Both providers send them off this computer, so `publicOnly`
+ * holds back a folder opened from disk and `never` turns every explanation off.
  */
 export async function explainRecord(rec: ScanRecord, deps: ExplainDeps): Promise<void> {
   const s = deps.settings();
-  if (s.explainMode === 'never' || rec.verdict.findings.length === 0) return;
+  if (s.explainMode === 'never') return;
+  if (s.explainMode === 'publicOnly' && !isPublicSource(rec)) return;
 
-  const provider = s.explainProvider === 'ollama' ? deps.providers.ollama(s.ollamaModel) : deps.providers.api();
-  if (!provider.isLocal && s.explainMode === 'publicOnly' && !isPublicSource(rec)) return;
+  // A clean GitHub clone still needs a count so the user can see Socket/lockfile collection ran.
+  if (rec.verdict.findings.length === 0) {
+    const n = rec.packages?.length ?? 0;
+    const socketNote = rec.verdict.notChecked.find((x) => /package scan|socket/i.test(x));
+    deps.post(rec.scanId, {
+      state: 'ready',
+      explanation: n === 0
+        ? 'The rules found no issues. This repository had no npm packages with exact versions to check.'
+        : `The rules found no issues. Stack3 listed ${n} npm package${n === 1 ? '' : 's'} in this repository.`,
+      fix: socketNote
+        ? socketNote
+        : n === 0
+          ? 'If you expected dependencies, check that a lockfile or pinned versions are present.'
+          : 'Search the package list below to inspect a dependency.',
+    });
+    return;
+  }
+
+  const provider = s.explainProvider === 'claude' ? deps.providers.claude() : deps.providers.api();
 
   deps.post(rec.scanId, { state: 'pending' });
   let result;

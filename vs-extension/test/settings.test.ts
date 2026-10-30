@@ -12,7 +12,6 @@ describe('settings contract', () => {
     expect(Object.keys(props).sort()).toEqual([
       'stack3.apiUrl',
       'stack3.dev.allowLocalhost',
-      'stack3.explain.ollamaModel',
       'stack3.explain.provider',
       'stack3.explain.sendSnippets',
       'stack3.report.mode',
@@ -46,27 +45,18 @@ describe('settings contract', () => {
     expect(getSettings().apiUrl).toBe('https://api.example');
   });
 
-  test('explanation provider defaults to the local model, and a bad value falls back', () => {
-    expect(getSettings()).toMatchObject({ explainProvider: 'ollama', ollamaModel: 'qwen2.5-coder:7b' });
-    __setInspect('stack3', 'explain.provider', { defaultValue: 'ollama', globalValue: 'api' });
+  test('explanation provider defaults to Claude, and a bad value falls back', () => {
+    expect(getSettings()).toMatchObject({ explainProvider: 'claude' });
+    __setInspect('stack3', 'explain.provider', { defaultValue: 'claude', globalValue: 'api' });
     expect(getSettings().explainProvider).toBe('api');
-    __setInspect('stack3', 'explain.provider', { defaultValue: 'ollama', globalValue: 'https://evil.example' });
-    expect(getSettings().explainProvider).toBe('ollama');
-  });
-  test('a workspace cannot choose the model or the provider (application scope)', () => {
-    __setInspect('stack3', 'explain.ollamaModel', { defaultValue: 'qwen2.5-coder:7b', workspaceValue: 'evil' });
-    __setInspect('stack3', 'explain.provider', { defaultValue: 'ollama', workspaceValue: 'api' });
-    expect(getSettings()).toMatchObject({ explainProvider: 'ollama', ollamaModel: 'qwen2.5-coder:7b' });
-  });
-  test('model names are restricted to the characters Ollama uses', () => {
-    for (const bad of ['', ' x', 'x y', '../../x', 'a;rm -rf /', 'a'.repeat(101), 5, null]) {
-      __setInspect('stack3', 'explain.ollamaModel', { defaultValue: 'qwen2.5-coder:7b', globalValue: bad });
-      expect(getSettings().ollamaModel, String(bad)).toBe('qwen2.5-coder:7b');
+    for (const bad of ['https://evil.example', 'ollama', 5, null]) {
+      __setInspect('stack3', 'explain.provider', { defaultValue: 'claude', globalValue: bad });
+      expect(getSettings().explainProvider, String(bad)).toBe('claude');
     }
-    __setInspect('stack3', 'explain.ollamaModel', { defaultValue: 'x', globalValue: 'llama3.2:latest' });
-    expect(getSettings().ollamaModel).toBe('llama3.2:latest');
-    __setInspect('stack3', 'explain.ollamaModel', { defaultValue: 'x', globalValue: 'library/llama3.2:3b' });
-    expect(getSettings().ollamaModel).toBe('library/llama3.2:3b');
+  });
+  test('a workspace cannot choose the provider (application scope)', () => {
+    __setInspect('stack3', 'explain.provider', { defaultValue: 'claude', workspaceValue: 'api' });
+    expect(getSettings()).toMatchObject({ explainProvider: 'claude' });
   });
   test('limits default to the spec values', () => {
     expect(DEFAULT_LIMITS).toEqual({

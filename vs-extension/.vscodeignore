@@ -3,6 +3,7 @@
 !package.json
 !README.md
 !LICENSE
+!images/icon.png
 !dist/extension.js
 !dist/worker.js
 !dist/webview/main.js

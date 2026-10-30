@@ -8,6 +8,9 @@ import { ExplainResponseSchema, ReportResponseSchema, ScanPackageResponseSchema 
 
 export type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
 
+/** The package check's answer. `notChecked` carries what it could not check even though it answered (I-5). */
+export type PackageResult = Result<Finding[]> & { notChecked?: string[] };
+
 export interface ReportPayload {
   indicators: Indicators;
   source?: { type: 'repo'; id: string };
@@ -15,7 +18,7 @@ export interface ReportPayload {
 }
 
 export interface Stack3Client {
-  scanPackage(purls: string[]): Promise<Result<Finding[]>>;
+  scanPackage(purls: string[]): Promise<PackageResult>;
   explain(level: Level, findings: SafeFinding[]): Promise<Result<{ explanation: string; fix: string }>>;
   report(p: ReportPayload): Promise<Result<void>>;
 }

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createOllamaProvider, OLLAMA_URL } from '../src/ai/ollama';
+import { CLAUDE_URL, createClaudeProvider } from '../src/ai/claude';
 import { explainRecord } from '../src/ai/explain';
 import { apiProvider } from '../src/ai/provider';
 import { createClient } from '../src/api/client';
@@ -22,6 +22,7 @@ import { recorder, reply, type Call } from './api/helpers';
 
 const API = 'https://api.stack3.test';
 const KEY = '9c'.repeat(32);
+const CLAUDE_KEY = 'sk-ant-api03-' + 'x'.repeat(40); // the user's own key: it goes in a header, never in a body
 const KEY2 = '5d'.repeat(32); // inside a flagged snippet, so only the redactor can keep it off the wire
 const MNEMONIC = [...Array<string>(11).fill('abandon'), 'about'].join(' ');
 const CANARY = 'CANARY-7f3a9e51-do-not-send';
@@ -205,8 +206,8 @@ describe('every flow, with a recording fetch', () => {
     const calls: Call[] = [];
     const posts: unknown[] = [];
     await explainRecord(rec, {
-      settings: () => ({ explainMode: 'publicOnly', explainProvider: 'api', ollamaModel: 'm' }),
-      providers: { ollama: () => createOllamaProvider({ model: 'm', fetchImpl: recorder().fetch }), api: () => apiProvider(clientFor(calls)) },
+      settings: () => ({ explainMode: 'publicOnly', explainProvider: 'api' }),
+      providers: { claude: () => createClaudeProvider({ apiKey: async () => CLAUDE_KEY, fetchImpl: recorder().fetch }), api: () => apiProvider(clientFor(calls)) },
       post: (_id, msg) => void posts.push(msg),
     });
     audit(calls, API, 'explain/api');
@@ -215,23 +216,30 @@ describe('every flow, with a recording fetch', () => {
     expect(posts.length).toBeGreaterThan(0);
   });
 
-  test('explain through the local model: loopback only', async () => {
+  test('explain through Claude: one request to api.anthropic.com, redacted findings only', async () => {
     const rec = await recordOf();
     const calls: Call[] = [];
-    const ollamaFetch = (async (url, init) => {
+    const claudeFetch = (async (url, init) => {
       calls.push({ url: String(url), init: init ?? {}, body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined });
-      return reply({ message: { content: JSON.stringify({ explanation: 'It runs a script when the folder opens.', fix: 'Delete the clone.' }) } });
+      return reply({ stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify({ explanation: 'It runs a script when the folder opens.', fix: 'Delete the clone.' }) }] });
     }) as typeof fetch;
     await explainRecord(rec, {
-      settings: () => ({ explainMode: 'always', explainProvider: 'ollama', ollamaModel: 'qwen2.5-coder:7b' }),
-      providers: { ollama: (model) => createOllamaProvider({ model, fetchImpl: ollamaFetch }), api: () => apiProvider(clientFor([])) },
+      settings: () => ({ explainMode: 'always', explainProvider: 'claude' }),
+      providers: { claude: () => createClaudeProvider({ apiKey: async () => CLAUDE_KEY, fetchImpl: claudeFetch }), api: () => apiProvider(clientFor([])) },
       post: () => undefined,
     });
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe(`${OLLAMA_URL}/api/chat`);
+    expect(calls[0]!.url).toBe(CLAUDE_URL);
+    expect(new URL(calls[0]!.url).origin).toBe('https://api.anthropic.com');
     const wire = JSON.stringify(calls[0]!.body);
-    for (const secret of PLANTED) expect(wire.includes(secret), `ollama: "${secret.slice(0, 20)}…" in the prompt`).toBe(false);
+    for (const secret of PLANTED) expect(wire.includes(secret), `claude: "${secret.slice(0, 20)}…" in the prompt`).toBe(false);
     expect(wire.includes(base)).toBe(false);
+    for (const s of strings(calls[0]!.body)) expect(s.length).toBeLessThanOrEqual(8000);
+    // Only the key and the API version travel as headers; the key is not in the body.
+    expect(Object.keys(calls[0]!.init.headers as Record<string, string>).map((h) => h.toLowerCase()).sort()).toEqual(['accept', 'anthropic-version', 'content-type', 'x-api-key']);
+    expect(wire.includes(CLAUDE_KEY)).toBe(false);
+    expect(calls[0]!.init.credentials).toBe('omit');
+    expect(calls[0]!.init.redirect).toBe('error');
   });
 
   test('report: addresses and domains only, the bot token is gone', async () => {

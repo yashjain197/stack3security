@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { collectPurls } from '../../src/engine/purls';
+import { collectPurls, locatePackageFindings } from '../../src/engine/purls';
 import { parseNpm } from '../../src/engine/parsers/lockfiles/npm';
 import { parseYarn1 } from '../../src/engine/parsers/lockfiles/yarn1';
 import { parseYarnBerry } from '../../src/engine/parsers/lockfiles/yarnBerry';
@@ -127,15 +127,18 @@ describe('collectPurls', () => {
 describe('notChecked', () => {
   const pkg = (deps: object = { lodash: '4.17.21' }, path = 'package.json') => vf(path, JSON.stringify({ name: 'x', dependencies: deps }));
   const UNRESOLVED = 'Exact package versions unresolved';
-  test('package.json with dependencies and no lockfile → unresolved', () => {
-    expect(collectPurls([pkg()]).notChecked).toEqual([UNRESOLVED]);
+  test('package.json with pinned dependencies and no lockfile still yields those purls', () => {
+    const r = collectPurls([pkg()]);
+    expect(r.purls).toEqual(['pkg:npm/lodash@4.17.21']);
+    expect(r.notChecked).toEqual([]);
+    expect(r.locations['pkg:npm/lodash@4.17.21']).toBe('package.json');
   });
   test('devDependencies and optionalDependencies count too', () => {
     expect(collectPurls([vf('package.json', '{"devDependencies":{"a":"1"}}')]).notChecked).toEqual([UNRESOLVED]);
     expect(collectPurls([vf('package.json', '{"optionalDependencies":{"a":"1"}}')]).notChecked).toEqual([UNRESOLVED]);
   });
   test('no manifest at all → nothing unchecked (Review Focus 2)', () => {
-    expect(collectPurls([vf('README.md', 'hi'), vf('src/a.ts', 'x')])).toEqual({ purls: [], notChecked: [] });
+    expect(collectPurls([vf('README.md', 'hi'), vf('src/a.ts', 'x')])).toEqual({ purls: [], notChecked: [], locations: {} });
   });
   test('package.json with no dependencies → nothing to check', () => {
     expect(collectPurls([vf('package.json', '{"name":"x","dependencies":{}}')]).notChecked).toEqual([]);
@@ -169,5 +172,110 @@ describe('notChecked', () => {
   test('a yaml alias bomb does not throw', () => {
     const bomb = 'a: &a [x,x,x,x]\n' + Array.from({ length: 80 }, (_, i) => `b${i}: *a`).join('\n');
     expect(collectPurls([pkg(), vf('pnpm-lock.yaml', bomb)]).notChecked).toEqual(['Could not read pnpm-lock.yaml']);
+  });
+});
+
+describe('manifests across the tree', () => {
+  test('a nested package.json with a pinned dependency is sent to Socket', () => {
+    const r = collectPurls([vf('tools/package.json', JSON.stringify({ name: 'tools', dependencies: { evil: '1.0.0' } }))]);
+    expect(r.purls).toEqual(['pkg:npm/evil@1.0.0']);
+    expect(r.notChecked).toEqual([]);
+    expect(r.locations['pkg:npm/evil@1.0.0']).toBe('tools/package.json');
+  });
+  test('a committed node_modules package.json name and version is sent', () => {
+    const r = collectPurls([vf('node_modules/evil-pkg/package.json', JSON.stringify({ name: 'evil-pkg', version: '9.9.9' }))]);
+    expect(r.purls).toEqual(['pkg:npm/evil-pkg@9.9.9']);
+    expect(r.locations['pkg:npm/evil-pkg@9.9.9']).toBe('node_modules/evil-pkg/package.json');
+    expect(r.notChecked).toEqual([]);
+  });
+  test('the root app name is not sent', () => {
+    const r = collectPurls([vf('package.json', JSON.stringify({ name: 'my-app', version: '1.0.0', dependencies: { lodash: '4.17.21' } }))]);
+    expect(r.purls).toEqual(['pkg:npm/lodash@4.17.21']);
+    expect(r.purls.some((p) => p.includes('my-app'))).toBe(false);
+  });
+  test('a caret range without a lockfile still yields the floor version for Socket', () => {
+    const r = collectPurls([vf('package.json', JSON.stringify({ name: 'x', dependencies: { lodash: '^4.17.21' } }))]);
+    expect(r.purls).toEqual(['pkg:npm/lodash@4.17.21']);
+    expect(r.notChecked).toEqual([]);
+    expect(r.locations['pkg:npm/lodash@4.17.21']).toBe('package.json');
+  });
+  test('a package.json of ranges and no lockfile (bezkoder/node-js-jwt-auth) lists every dependency', () => {
+    const r = collectPurls([
+      vf(
+        'package.json',
+        JSON.stringify({
+          name: 'node-js-jwt-auth',
+          version: '1.0.0',
+          dependencies: {
+            bcryptjs: '^2.4.3',
+            cors: '^2.8.5',
+            express: '^4.18.2',
+            jsonwebtoken: '^9.0.0',
+            mysql2: '^2.3.3',
+            sequelize: '^6.32.1',
+          },
+        }),
+      ),
+    ]);
+    expect(r.purls).toEqual([
+      'pkg:npm/bcryptjs@2.4.3',
+      'pkg:npm/cors@2.8.5',
+      'pkg:npm/express@4.18.2',
+      'pkg:npm/jsonwebtoken@9.0.0',
+      'pkg:npm/mysql2@2.3.3',
+      'pkg:npm/sequelize@6.32.1',
+    ]);
+    expect(r.notChecked).toEqual([]);
+  });
+  test('latest and 1.x stay unresolved, with no fake purl', () => {
+    const r = collectPurls([vf('package.json', JSON.stringify({ name: 'x', dependencies: { lodash: 'latest', a: '1.x' } }))]);
+    expect(r.purls).toEqual([]);
+    expect(r.notChecked).toEqual(['Exact package versions unresolved']);
+  });
+  test('a lockfile location is preferred when the same package is also in package.json', () => {
+    const lock = JSON.stringify({ lockfileVersion: 3, packages: { 'node_modules/lodash': { version: '4.17.21', resolved: 'https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz', integrity: 'sha512-x' } } });
+    const r = collectPurls([vf('package-lock.json', lock), vf('package.json', JSON.stringify({ dependencies: { lodash: '4.17.21' } }))]);
+    expect(r.locations['pkg:npm/lodash@4.17.21']).toBe('package-lock.json');
+  });
+});
+
+describe('locatePackageFindings', () => {
+  const loc = { 'pkg:npm/evil@1.0.0': 'tools/package.json' };
+  test('a Socket finding that names the package gets that file', () => {
+    const f = {
+      ruleId: 'socket.malware',
+      layer: 'dependency' as const,
+      severity: 'critical' as const,
+      title: 'Socket.dev flagged evil@1.0.0: malware',
+      evidence: 'Socket.dev reported critical (supplyChainRisk) alert "malware" on evil@1.0.0.',
+      source: 'socket' as const,
+      checkedAt: '2026-10-29T18:00:00+05:30',
+    };
+    expect(locatePackageFindings([f], loc)[0]?.location).toEqual({ file: 'tools/package.json' });
+  });
+  test('a finding that already has a location is left alone', () => {
+    const f = {
+      ruleId: 'socket.malware',
+      layer: 'dependency' as const,
+      severity: 'critical' as const,
+      title: 'Socket.dev flagged evil@1.0.0: malware',
+      evidence: 'Socket.dev reported critical on pkg:npm/evil@1.0.0.',
+      location: { file: 'already.json', line: 2 },
+      source: 'socket' as const,
+      checkedAt: '2026-10-29T18:00:00+05:30',
+    };
+    expect(locatePackageFindings([f], loc)[0]?.location).toEqual({ file: 'already.json', line: 2 });
+  });
+  test('a non-socket finding is not given a package location', () => {
+    const f = {
+      ruleId: 'deps.unverified-source',
+      layer: 'repo-file' as const,
+      severity: 'caution' as const,
+      title: 't',
+      evidence: 'evil@1.0.0',
+      source: 'rules' as const,
+      checkedAt: '2026-10-29T18:00:00+05:30',
+    };
+    expect(locatePackageFindings([f], loc)[0]?.location).toBeUndefined();
   });
 });

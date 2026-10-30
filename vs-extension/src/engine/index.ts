@@ -37,5 +37,5 @@ export function engineScan(files: VirtualFile[], ctx: ScanContext, rules: Rule[]
   for (const f of findings) if (f.ruleId === UNPARSEABLE) notChecked.add(`Could not parse ${f.location?.file ?? 'a config file'}`);
   const purls = collectPurls(files);
   for (const n of purls.notChecked) notChecked.add(n);
-  return { findings, notChecked: [...notChecked], purls: purls.purls };
+  return { findings, notChecked: [...notChecked], purls: purls.purls, purlLocations: purls.locations };
 }

@@ -43,7 +43,7 @@ describe('extension wiring', () => {
   test('activate registers stack3.cloneAndScan and keeps its disposable', () => {
     const ctx = context();
     activate(ctx);
-    expect(__calls.registered).toEqual(['stack3.cloneAndScan']);
+    expect(__calls.registered).toEqual(['stack3.setClaudeApiKey', 'stack3.setSocketApiKey', 'stack3.cloneAndScan']);
     // the guard (collection, status bar, watchers, staged-secret warning), the quarantine file viewer, and the command
     expect(ctx.subscriptions.length).toBeGreaterThanOrEqual(6);
     expect(() => deactivate()).not.toThrow();

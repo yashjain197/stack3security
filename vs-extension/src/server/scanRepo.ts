@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { Result } from '../api/client';
 import { buildVerdict } from '../api/merge';
 import { extractIndicators } from '../engine/indicators';
+import { locatePackageFindings } from '../engine/purls';
 import type { EngineResult, Finding } from '../engine/types';
 import { validateRepoUrl } from '../quarantine/paths';
 import { buildGraphReport, type GraphReport, type PackageRef } from '../report/graphReport';
@@ -99,7 +100,8 @@ export function createRepoScanner(deps: ScanRepoDeps, opts: ScannerOptions): { s
           const { sha } = cloned.value;
 
           const local = await deps.scan(dir);
-          const remote: PackageScan = local.purls.length > 0 ? await deps.scanPackages(local.purls) : { ok: true, value: [] };
+          const lookedUp: PackageScan = local.purls.length > 0 ? await deps.scanPackages(local.purls) : { ok: true, value: [] };
+          const remote: PackageScan = lookedUp.ok ? { ...lookedUp, value: locatePackageFindings(lookedUp.value, local.purlLocations ?? {}) } : lookedUp;
           const mismatch = ref !== undefined && !sha.startsWith(ref.toLowerCase());
           const notChecked = [...local.notChecked, ...(remote.ok ? remote.notChecked ?? [] : [])];
           if (mismatch) notChecked.push(`Commit ${ref.toLowerCase()} was not scanned; the default branch tip ${sha.slice(0, 7)} was.`);

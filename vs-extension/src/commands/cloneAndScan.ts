@@ -1,10 +1,11 @@
 import type { Result, Stack3Client } from '../api/client';
 import { buildVerdict } from '../api/merge';
 import { extractIndicators } from '../engine/indicators';
+import { locatePackageFindings } from '../engine/purls';
 import { ENGINE_VERSION } from '../engine/version';
 import type { EngineResult } from '../engine/types';
 import { validateRepoUrl } from '../quarantine/paths';
-import { scanIdFor, type Registry, type ScanRecord } from '../quarantine/registry';
+import { scanIdFor, type Registry, type ScanRecord, type ScannedPackage } from '../quarantine/registry';
 import { hashScanSet } from '../scan/hash';
 
 export interface CloneAndScanDeps {
@@ -19,6 +20,12 @@ export interface CloneAndScanDeps {
   report?(message: string): void;
   now?(): number;
 }
+
+const withLocations = (local: EngineResult, remote: Result<EngineResult['findings']>): Result<EngineResult['findings']> =>
+  remote.ok ? { ...remote, value: locatePackageFindings(remote.value, local.purlLocations ?? {}) } : remote;
+
+const packagesOf = (local: EngineResult): ScannedPackage[] =>
+  local.purls.map((purl) => (local.purlLocations?.[purl] ? { purl, file: local.purlLocations[purl] } : { purl }));
 
 const indicatorsOf = (local: EngineResult, remote: Result<EngineResult['findings']>) => extractIndicators([...local.findings, ...(remote.ok ? remote.value : [])]);
 
@@ -57,7 +64,7 @@ export async function cloneAndScan(input: string, deps: CloneAndScanDeps): Promi
   const local = await deps.scan(dir);
 
   report('Checking packages…');
-  const remote = await deps.client.scanPackage(local.purls);
+  const remote = withLocations(local, await deps.client.scanPackage(local.purls));
 
   const verdict = buildVerdict(local, remote, { type: 'repo', id: `github.com/${target.owner}/${target.repo}@${sha.slice(0, 7)}` }, indicatorsOf(local, remote));
 
@@ -69,6 +76,7 @@ export async function cloneAndScan(input: string, deps: CloneAndScanDeps): Promi
       url: target.url,
       sha,
       verdict,
+      packages: packagesOf(local),
       scanSetHash: await hashScanSet(dir),
       createdAt: (deps.now ?? Date.now)(),
     };
@@ -100,11 +108,11 @@ export async function rescanRecord(rec: ScanRecord, deps: RescanDeps): Promise<R
   report('Scanning files…');
   const local = await deps.scan(rec.dir);
   report('Checking packages…');
-  const remote = await deps.client.scanPackage(local.purls);
+  const remote = withLocations(local, await deps.client.scanPackage(local.purls));
   const verdict = buildVerdict(local, remote, rec.verdict.target, indicatorsOf(local, remote));
   let next: ScanRecord;
   try {
-    next = { ...rec, verdict, scanSetHash: await hashScanSet(rec.dir), createdAt: (deps.now ?? Date.now)() };
+    next = { ...rec, verdict, packages: packagesOf(local), scanSetHash: await hashScanSet(rec.dir), createdAt: (deps.now ?? Date.now)() };
     await deps.registry.add(next);
   } catch {
     deps.showError('Could not save the new scan result.');

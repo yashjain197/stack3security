@@ -1,5 +1,6 @@
-// Opt-in: runs the real Ollama provider against the real local Ollama with hostile findings. ~30 s on CPU.
+// Opt-in: runs the real Claude provider against the real Anthropic API with hostile findings. Costs a fraction of a cent.
 // It checks the plumbing and the guards, not the model's wording (which varies from run to run).
+// Needs CLAUDE_API_KEY (or ANTHROPIC_API_KEY): node --env-file=.env test/integration/claude.mjs
 import { build } from 'esbuild';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,12 +8,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const scratch = mkdtempSync(join(tmpdir(), 'stack3-ollama-'));
-const model = process.argv[2] ?? process.env.STACK3_OLLAMA_MODEL ?? 'qwen2.5-coder:7b';
+const scratch = mkdtempSync(join(tmpdir(), 'stack3-claude-'));
+const apiKey = process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+if (!apiKey) {
+  console.error('Set CLAUDE_API_KEY (e.g. node --env-file=.env test/integration/claude.mjs).');
+  process.exit(2);
+}
 
 const out = join(scratch, 'ai.cjs');
 await build({
-  stdin: { contents: "export * from './src/ai/ollama'; export * from './src/ai/explain';", resolveDir: root, loader: 'ts' },
+  stdin: { contents: "export * from './src/ai/claude'; export * from './src/ai/explain';", resolveDir: root, loader: 'ts' },
   outfile: out, bundle: true, platform: 'node', format: 'cjs', mainFields: ['module', 'main'], logLevel: 'silent', external: ['vscode'],
 });
 const { createRequire } = await import('node:module');
@@ -36,13 +41,13 @@ const levelBefore = rec.verdict.level;
 const keyOnWire = [];
 const spy = (fetchImpl) => async (url, init) => { keyOnWire.push(String(init.body)); return fetchImpl(url, init); };
 await ai.explainRecord(rec, {
-  settings: () => ({ explainMode: 'publicOnly', explainProvider: 'ollama', ollamaModel: model }),
-  providers: { ollama: (m) => ai.createOllamaProvider({ model: m, fetchImpl: spy(fetch) }), api: () => { throw new Error('api provider must not be used'); } },
+  settings: () => ({ explainMode: 'publicOnly', explainProvider: 'claude' }),
+  providers: { claude: () => ai.createClaudeProvider({ apiKey: async () => apiKey, fetchImpl: spy(fetch) }), api: () => { throw new Error('api provider must not be used'); } },
   post: (_id, msg) => posts.push(msg),
 });
 const secs = ((Date.now() - t0) / 1000).toFixed(1);
 const last = posts.at(-1);
-console.log(`model ${model}, ${secs}s, states: ${posts.map((p) => p.state).join(' -> ')}\n`);
+console.log(`model ${ai.CLAUDE_MODEL}, ${secs}s, states: ${posts.map((p) => p.state).join(' -> ')}\n`);
 
 check('the model answered (not unavailable)', last?.state === 'ready', last?.state === 'unavailable' ? last.reason : '');
 if (last?.state === 'ready') {
@@ -52,7 +57,7 @@ if (last?.state === 'ready') {
 }
 check('the verdict is exactly as the rules decided', rec.verdict.level === levelBefore && rec.verdict.explanation === undefined);
 check('the secret key never reached the model', !keyOnWire.join('').includes('ab'.repeat(32)));
-check('the request went only to this computer', keyOnWire.length === 1);
+check('exactly one request was made', keyOnWire.length === 1);
 rmSync(scratch, { recursive: true, force: true });
 console.log(`\n${results.filter(Boolean).length}/${results.length} checks passed`);
 process.exit(results.every(Boolean) ? 0 : 1);

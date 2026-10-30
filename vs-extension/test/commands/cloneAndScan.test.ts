@@ -102,6 +102,7 @@ describe('cloneAndScan: success', () => {
     expect(rec.scanId).toBe(scanIdFor(URL_, SHA, ENGINE_VERSION));
     expect(rec.createdAt).toBe(1_700_000_000_000);
     expect(rec.verdict.level).toBe('critical');
+    expect(rec.packages).toEqual([{ purl: 'pkg:npm/lodash@4.17.21' }]);
     expect(rec.verdict.target).toEqual({ type: 'repo', id: 'github.com/octo/hello@ccccccc' });
     expect(rec.scanSetHash).toBe(await hashScanSet(rec.dir));
     expect(t.registry.get(rec.scanId)).toEqual(rec);

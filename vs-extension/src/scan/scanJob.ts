@@ -26,5 +26,6 @@ export async function scanJob(job: ScanJob, rules: Rule[] = job.ctx.mode === 'qu
     findings: [...walked.findings.map((f) => ({ ...f, checkedAt: job.ctx.checkedAt })), ...result.findings],
     notChecked: [...new Set([...walked.notChecked, ...result.notChecked])],
     purls: result.purls,
+    purlLocations: result.purlLocations,
   };
 }

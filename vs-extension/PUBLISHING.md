@@ -34,6 +34,14 @@ No PAT yet? `npm run package` builds `stack3-vscode-<version>.vsix`; upload it b
    (`.github/workflows/vscode-publish.yml`) checks the tag equals the version, runs `npm run ci`, then publishes.
    It can also be started by hand from the Actions tab.
 
+## Images on the Marketplace page
+
+The icon (`images/icon.png`) is inside the package and always shows. The README images load from `--baseImagesUrl` (set in the
+`package` and `publish:*` scripts and in the workflow), which points at the public repo
+`github.com/mdimran29/stack3-vscode-assets` (`images/` at its root). If you change an image in `vs-extension/images/`, copy it
+to that repo too, or the page keeps the old one. The main repo can stay private. Installing a new build over an old one needs
+a higher `version` (VS Code ignores a rebuild with the same number).
+
 ## After publishing
 
 New extensions are scanned automatically and can take a few minutes to appear. Check the page at

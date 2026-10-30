@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import type { Verdict } from '../engine/types';
 import { removeQuarantined } from './remove';
 
+export interface ScannedPackage {
+  purl: string;
+  file?: string;
+}
+
 export interface ScanRecord {
   scanId: string;
   dir: string;
@@ -10,6 +15,8 @@ export interface ScanRecord {
   verdict: Verdict;
   scanSetHash: string;
   createdAt: number;
+  /** Packages the clone scan sent to Socket, so the panel can list and search them. */
+  packages?: ScannedPackage[];
   /** Set when the user opened the clone. Such a clone is theirs now and is not deleted automatically. */
   openedAt?: number;
 }

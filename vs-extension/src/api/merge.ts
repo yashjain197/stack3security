@@ -1,6 +1,6 @@
 import { aggregate } from '../engine/verdict';
 import type { EngineResult, Indicators, Verdict } from '../engine/types';
-import type { Result } from './client';
+import type { PackageResult } from './client';
 import type { Finding } from '../engine/types';
 
 export const PACKAGE_SCAN_UNAVAILABLE = 'Package scan unavailable';
@@ -10,9 +10,9 @@ export const PACKAGE_SCAN_UNAVAILABLE = 'Package scan unavailable';
  * `aggregate`, so the server can only add findings (I-4); a failed scan adds a notChecked entry,
  * never "no findings" (I-5).
  */
-export function buildVerdict(local: EngineResult, remote: Result<Finding[]>, target: Verdict['target'], indicators: Indicators): Verdict {
+export function buildVerdict(local: EngineResult, remote: PackageResult, target: Verdict['target'], indicators: Indicators): Verdict {
   const findings = [...local.findings, ...(remote.ok ? remote.value : [])];
-  const notChecked = [...new Set([...local.notChecked, ...(remote.ok ? [] : [PACKAGE_SCAN_UNAVAILABLE])])];
+  const notChecked = [...new Set([...local.notChecked, ...(remote.ok ? remote.notChecked ?? [] : remote.notChecked ?? [PACKAGE_SCAN_UNAVAILABLE])])];
   return aggregate(findings, notChecked, target, indicators);
 }
 

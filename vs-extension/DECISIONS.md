@@ -200,7 +200,7 @@ Run on this machine with `npm run ci` (lint, `tsc`, 1179 tests, engine line cove
 
 | Check | Result |
 |---|---|
-| Egress audit (`test/egress.test.ts`) | Clone, watcher, explain (API and local model) and report run against a repo with planted keys, a seed phrase and a canary. No planted value, local path or snippet over 300 characters appears in any request, and every request goes to the configured origin (or loopback for Ollama). Mutation check: with the redactor disabled the audit fails. |
+| Egress audit (`test/egress.test.ts`) | Clone, watcher, explain (Stack3 API and Claude) and report run against a repo with planted keys, a seed phrase and a canary. No planted value, local path or snippet over 300 characters appears in any request, and every request goes to the configured origin (`api.anthropic.com` for Claude, with only the key and API version as extra headers). Mutation check: with the redactor disabled the audit fails. |
 | Bundle check | No `eval(`, `new Function(`, string `setTimeout` or `innerHTML =` in `dist/*.js`. |
 | `.vsix` contents | 9 files, 240 KB: `dist/extension.js`, `dist/worker.js`, `dist/webview/*`, `package.json`, README, LICENSE. No sources, tests or server bundle. |
 | Install on a fresh profile | VS Code 1.142.0 and Cursor 3.18.9: installed and listed as `stack3.stack3-vscode@0.1.0`. This shows the package is accepted, not that every command was exercised in Cursor. |
