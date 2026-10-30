@@ -1,6 +1,7 @@
 // Local phishing heuristics for web3 pages. They run on every captured page with no
 // network access; the API's domain and page checks add to them when the device is linked.
 
+import { WEBSITE_URL } from "./api";
 import { worstLevel } from "./decode";
 import type { Level, PageSignals } from "./types";
 
@@ -31,6 +32,9 @@ export const BRANDS: Brand[] = [
 export const BRAND_NAMES = BRANDS.map((brand) => brand.name);
 
 const LURE_WORDS = /(airdrop|claim|reward|giveaway|bonus|whitelist|rectify|validate|sync-?wallet|dapp-?fix|wallet-?connect|restore|migrat|unlock|eligib)/i;
+
+// Stack3's own website: its threat reports and docs talk about seed phrases without asking for one.
+const TRUSTED_HOSTS = new Set([new URL(WEBSITE_URL).hostname]);
 
 const officialFor = (host: string, brand: Brand) =>
   brand.domains.some((domain) => host === domain || host.endsWith(`.${domain}`));
@@ -79,6 +83,9 @@ export function assessPage(
   extra: { blocklisted: boolean } = { blocklisted: false },
 ): PageAssessment {
   const host = rawHost.toLowerCase().replace(/^www\./, "");
+  if (TRUSTED_HOSTS.has(host) || TRUSTED_HOSTS.has(rawHost.toLowerCase())) return { level: "no_known_issues", reasons: [] };
+  // Official wallet and dapp domains can mention recovery phrases in support or settings forms.
+  const officialDomain = BRANDS.some((brand) => officialFor(host, brand));
   const reasons: string[] = [];
   const levels: Level[] = [];
   const flag = (level: Level, reason: string) => {
@@ -93,7 +100,7 @@ export function assessPage(
   if ((signals.recoveryWordCount ?? 0) >= 12) {
     flag("critical", `This page has ${signals.recoveryWordCount} recovery-word inputs. No legitimate site or dapp ever asks for your recovery phrase.`);
   } else if (signals.seedPhraseField) {
-    flag("high", "This page asks for a seed / recovery phrase. Anyone who gets it can empty your wallet.");
+    flag(officialDomain ? "caution" : "high", "This page asks for a seed / recovery phrase. Anyone who gets it can empty your wallet.");
   }
   if (signals.asksForPrivateKey) flag("high", "This page asks for a private key. Never paste it into a website.");
 

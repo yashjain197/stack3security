@@ -6,8 +6,16 @@ import { showPageAlert } from "../utils/overlay";
 import { BRAND_NAMES } from "../utils/phishing";
 import type { PageCapture, PageSignals, TabMessage } from "../utils/types";
 
-const SEED_WORDS = /seed|recovery|mnemonic|secret\s*phrase/i;
-const PRIVATE_KEY = /private\s*key/i;
+// A field asks for a wallet secret only when its purpose names one: a seed / recovery / secret
+// phrase, mnemonic words, or a private key. "Recovery email" or "seed wallet" are not enough.
+const SEED_PHRASE = /\b(seed|recovery|secret([\s_-]*recovery)?|backup|mnemonic)[\s_-]*(phrase|words?)\b|\bmnemonic\b/i;
+const PRIVATE_KEY = /\bprivate[\s_-]*key\b/i;
+// A placeholder counts only when it asks for entry ("Enter your seed phrase"), never when it is an
+// example sentence that merely mentions one ("e.g. this page asked for my seed phrase").
+const ENTRY_CUE = /\b(enter|type|paste|input|import|restore|provide|your)\b/i;
+const EXAMPLE = /^\s*(e\.?\s?g\b|example|for example|i\.?\s?e\b)/i;
+// Only free-text boxes can receive a phrase or key.
+const TEXT_TYPES = new Set(["", "text", "password", "tel"]);
 
 /** A fixed element covering most of the viewport, as fake wallet pop-ups use. */
 function hasFullscreenOverlay(): boolean {
@@ -24,11 +32,11 @@ function hasFullscreenOverlay(): boolean {
   return false;
 }
 
+/** What the field is for, from its own attributes. The placeholder is judged separately in asksFor(). */
 function attributeText(element: Element): string {
   return [
     element.getAttribute("name"),
     element.getAttribute("id"),
-    element.getAttribute("placeholder"),
     element.getAttribute("aria-label"),
     element.getAttribute("autocomplete"),
   ]
@@ -46,17 +54,30 @@ function labelText(element: Element): string {
   }
 }
 
+function isTextEntry(field: Element): boolean {
+  if (field.tagName === "INPUT" && !TEXT_TYPES.has((field.getAttribute("type") ?? "").toLowerCase())) return false;
+  if ((field as HTMLInputElement).disabled || (field as HTMLInputElement).readOnly) return false;
+  // Invisible fields are not asking the user for anything (yet); a later capture sees them once shown.
+  return field.getClientRects().length > 0;
+}
+
+/** Does this field ask the user to type the secret described by `pattern`? */
+function asksFor(field: Element, pattern: RegExp): boolean {
+  if (pattern.test(`${attributeText(field)} ${labelText(field)}`)) return true;
+  const placeholder = field.getAttribute("placeholder") ?? "";
+  return !EXAMPLE.test(placeholder) && ENTRY_CUE.test(placeholder) && pattern.test(placeholder);
+}
+
 function collectSignals(): PageSignals {
-  const fields = [...document.querySelectorAll("input, textarea")];
+  const fields = [...document.querySelectorAll("input, textarea")].filter(isTextEntry);
   let seedPhraseField = false;
   let asksForPrivateKey = false;
   let wordInputs = 0;
 
   for (const field of fields) {
-    const text = `${attributeText(field)} ${labelText(field)}`;
-    if (SEED_WORDS.test(text)) seedPhraseField = true;
-    if (PRIVATE_KEY.test(text)) asksForPrivateKey = true;
-    if (/^(word|mnemonic)[\s_-]?\d{1,2}$/i.test(field.getAttribute("name") ?? "")) wordInputs += 1;
+    if (asksFor(field, SEED_PHRASE)) seedPhraseField = true;
+    if (asksFor(field, PRIVATE_KEY)) asksForPrivateKey = true;
+    if (/^(word|mnemonic|seed)[\s_-]?\d{1,2}$/i.test(field.getAttribute("name") ?? "")) wordInputs += 1;
   }
 
   const externalScriptHosts = new Set<string>();

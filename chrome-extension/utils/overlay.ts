@@ -58,6 +58,13 @@ button:focus-visible { outline: 2px solid #0a0a0a; outline-offset: 2px; }
 .banner button.solid { background: #fff; color: #0a0a0a; border-color: #fff; }
 .interstitial .card { border-color: #c62828; border-top-width: 4px; }
 .interstitial ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+@keyframes s3-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes s3-rise { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes s3-drop { from { transform: translateY(-100%); } to { transform: none; } }
+.backdrop { animation: s3-fade .16s ease-out; }
+.card { animation: s3-rise .22s cubic-bezier(.2, .7, .2, 1); }
+.banner { animation: s3-drop .25s cubic-bezier(.2, .7, .2, 1); }
+@media (prefers-reduced-motion: reduce) { .backdrop, .card, .banner, .spinner { animation: none; } }
 `;
 
 type Child = Node | string | null | undefined | false;
