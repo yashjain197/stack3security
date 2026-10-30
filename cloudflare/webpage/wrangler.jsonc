@@ -7,8 +7,8 @@
   "containers": [
     {
       "class_name": "WebContainer",
-      "image": "../../frontend/website/Dockerfile",
-      "image_build_context": "../../frontend/website",
+      "image": "./Dockerfile",
+      "image_build_context": "./context",
       "instance_type": "basic",
       "max_instances": 1
     }
