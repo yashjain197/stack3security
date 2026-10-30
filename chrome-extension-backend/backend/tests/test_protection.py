@@ -408,3 +408,29 @@ async def test_payment_names_the_package_that_drains_to_the_same_wallet(client, 
     linked = next(item for item in body["findings"] if "same wallet" in item["evidence"])
     assert package in linked["evidence"]
     assert SPENDER in linked["evidence"]
+
+
+async def test_imran_scans_packages_with_socket(client, monkeypatch):
+    """The service key scans npm package ids. A user token is not accepted."""
+    body = {"purls": ["pkg:npm/evil@1.0.0"]}
+    denied = await client.post("/v1/internal/scan-packages", json=body)
+    assert denied.status_code == 401
+    monkeypatch.setattr(get_settings(), "socket_api_key", SecretStr("socket-test"))
+    key = get_settings().internal_service_key.get_secret_value()
+    with respx.mock(assert_all_called=False) as mock:
+        mock.post("https://api.socket.dev/v0/purl").mock(
+            return_value=httpx.Response(
+                200,
+                json=[{"inputPurl": "pkg:npm/evil@1.0.0", "alerts": [{"severity": "critical", "type": "malware"}]}],
+            )
+        )
+        accepted = await client.post("/v1/internal/scan-packages", json=body, headers={"X-Service-Key": key})
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["level"] == "critical"
+    assert any(item["source"] == "socket" for item in accepted.json()["findings"])
+    bad = await client.post(
+        "/v1/internal/scan-packages",
+        json={"purls": ["not-a-package"]},
+        headers={"X-Service-Key": key},
+    )
+    assert bad.status_code == 422
