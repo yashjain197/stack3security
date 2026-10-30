@@ -11,6 +11,7 @@ import { createLimiter } from './limiter';
 import { createReporter } from './reporter';
 import { createRepoScanner, type PackageScan } from './scanRepo';
 import { createSocketScanner } from './socket';
+import { createStack3PackageScanner } from './stack3Packages';
 import { createStats } from './stats';
 
 const log = (event: Record<string, unknown>): void => console.log(JSON.stringify({ ts: new Date().toISOString(), ...event }));
@@ -24,13 +25,13 @@ function main(): void {
     process.exit(1);
   }
 
-  // Without a Socket key every repository with packages is reported as "Package scan unavailable" (so at best "unknown"),
-  // never as clean.
-  const socket = config.socket ? createSocketScanner(config.socket) : undefined;
+  // Package data comes from the Stack3 API (which holds the Socket key) unless a Socket key is set here, which talks to
+  // Socket directly. A failure of either is reported as "Package scan unavailable" (so at best "unknown"), never as clean.
+  const packageSource = config.socket ? 'socket' : 'stack3';
+  const checkPackages = config.socket ? createSocketScanner(config.socket) : createStack3PackageScanner({ apiUrl: config.apiUrl, serviceKey: config.serviceKey });
   const scanPackages = async (purls: string[]): Promise<PackageScan> => {
-    if (!socket) return { ok: false, reason: 'Package scan is not configured on this server.' };
-    const res = await socket(purls);
-    log({ event: 'socket', ok: res.ok, packages: purls.length, ...(res.ok ? { findings: res.value.length, incomplete: Boolean(res.notChecked?.length) } : { reason: res.reason }) });
+    const res = await checkPackages(purls);
+    log({ event: 'packages', source: packageSource, ok: res.ok, packages: purls.length, ...(res.ok ? { findings: res.value.length, incomplete: Boolean(res.notChecked?.length) } : { reason: res.reason }) });
     return res;
   };
 
@@ -58,7 +59,7 @@ function main(): void {
   server.headersTimeout = 10_000;
   server.requestTimeout = 20_000;
   server.keepAliveTimeout = 5_000;
-  server.listen(config.port, '0.0.0.0', () => log({ event: 'listening', port: config.port, apiUrl: config.apiUrl, socket: socket ? (config.socket?.orgSlug ? 'org' : 'legacy') : 'off' }));
+  server.listen(config.port, '0.0.0.0', () => log({ event: 'listening', port: config.port, apiUrl: config.apiUrl, packages: config.socket ? (config.socket.orgSlug ? 'socket-org' : 'socket-legacy') : 'stack3-api' }));
 
   // Housekeeping: clones are removed after every scan; this catches any left by a crash.
   const sweep = () => void sweepQuarantine(1).catch(() => undefined);
