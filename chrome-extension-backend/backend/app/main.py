@@ -27,6 +27,8 @@ from app.modules.graph.tigergraph import close_tigergraph
 from app.modules.graph.worker import start_graph_sync, stop_graph_sync
 from app.modules.identity.router import jwks_router, me_router
 from app.modules.identity.router import router as auth_router
+from app.modules.protection.http import close_http
+from app.modules.protection.router import router as protection_router
 from app.modules.teams.router import router as teams_router
 
 logger = get_logger("app")
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     await stop_graph_sync()
     await close_tigergraph()
+    await close_http()
     if app.state.redis is not None:
         await app.state.redis.aclose()
     await dispose_engine()
@@ -73,7 +76,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID", "Retry-After"],
+        expose_headers=["X-Request-ID", "Retry-After", "ETag"],
         max_age=600,
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
@@ -86,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(billing_router)
     app.include_router(teams_router)
     app.include_router(graph_router)
+    app.include_router(protection_router)
     return app
 
 

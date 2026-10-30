@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "__Secure-s3_rt"
     refresh_cookie_path: str = "/v1/auth"
     cookie_secure: bool = True
+    # strict on localhost (site and API are both localhost). none when the site is on another domain, such as Netlify.
+    cookie_samesite: Literal["strict", "lax", "none"] = "strict"
 
     otp_pepper: SecretStr = SecretStr("dev-only-otp-pepper-change-me-0123456789abcdef")
     otp_ttl_seconds: int = 10 * 60
@@ -92,6 +94,14 @@ class Settings(BaseSettings):
     tigergraph_api_key: SecretStr | None = None
     graph_sync_interval_seconds: int = 15
 
+    # Chain reads for transaction review and contract scan. The RPC URL is Ethereum mainnet and may embed its own key.
+    etherscan_api_key: SecretStr | None = None
+    rpc_url_ethereum: SecretStr | None = None
+    # Optional. Script check still uses the threat graph when this is empty, and says Socket was not checked.
+    socket_api_key: SecretStr | None = None
+    # Public phishing lists. Tests turn this off so they never call GitHub.
+    rules_remote: bool = True
+
     internal_service_key: SecretStr = SecretStr("dev-only-internal-key-change-me-0123456789")
 
     @property
@@ -113,6 +123,21 @@ class Settings(BaseSettings):
     def tigergraph_configured(self) -> bool:
         """True when the threat graph can be reached: host plus the runtime secret."""
         return bool(self.tigergraph_host and self.tigergraph_secret)
+
+    @property
+    def etherscan_configured(self) -> bool:
+        """True when contract source and age can be read from Etherscan."""
+        return self.etherscan_api_key is not None
+
+    @property
+    def rpc_configured(self) -> bool:
+        """True when Ethereum mainnet bytecode and ownership can be read."""
+        return self.rpc_url_ethereum is not None
+
+    @property
+    def socket_configured(self) -> bool:
+        """True when loaded JavaScript can be checked with Socket.dev."""
+        return self.socket_api_key is not None
 
     @property
     def dodo_base_url(self) -> str:
@@ -141,6 +166,9 @@ class Settings(BaseSettings):
         "tigergraph_password",
         "tigergraph_secret",
         "tigergraph_api_key",
+        "etherscan_api_key",
+        "rpc_url_ethereum",
+        "socket_api_key",
         mode="before",
     )
     @classmethod
@@ -151,6 +179,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _enforce_production_secrets(self) -> "Settings":
         """Refuse to boot in production with missing or default secrets."""
+        if self.cookie_samesite == "none" and not self.cookie_secure:
+            raise ValueError("COOKIE_SAMESITE=none requires COOKIE_SECURE=true")
         if not self.is_production:
             return self
         problems: list[str] = []
