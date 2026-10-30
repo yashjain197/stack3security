@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { cleanText, clip } from '../engine/rules/evidence';
+import { cleanText, clip, trimEndChars } from '../engine/rules/evidence';
 import { redactSecrets } from '../engine/secretPatterns';
 import type { Finding, Indicators, Level } from '../engine/types';
 import { redactAll, type SafeFinding } from '../verdict/redact';
@@ -32,7 +32,7 @@ const TIMEOUT_MS = 8000;
 const MAX_BODY = 1024 * 1024;
 const MAX_PURLS = 5000;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-const PURL = /^pkg:npm\/(?:%40[A-Za-z0-9._~-]+\/)?[A-Za-z0-9._~-]+@[A-Za-z0-9.%+_-]+$/;
+export const PURL = /^pkg:npm\/(?:%40[A-Za-z0-9._~-]+\/)?[A-Za-z0-9._~-]+@[A-Za-z0-9.%+_-]+$/;
 
 /** HTTPS only; plain http only for a loopback host and only when the user enabled the dev setting (I-16). */
 export function validateBaseUrl(baseUrl: string, allowLocalhost: boolean): { ok: true; url: URL } | { ok: false; reason: string } {
@@ -52,8 +52,8 @@ export function validateBaseUrl(baseUrl: string, allowLocalhost: boolean): { ok:
 
 export type Attempt = { ok: true; value: unknown } | { ok: false; reason: string; retry: boolean };
 
-/** Read at most MAX_BODY bytes. The stream is cancelled the moment the cap is passed or the request is aborted. */
-async function readCapped(res: Response, signal: AbortSignal): Promise<Uint8Array | 'too-large'> {
+/** Read at most `maxBytes` (1 MiB by default). The stream is cancelled the moment the cap is passed or the request is aborted. */
+export async function readCapped(res: Response, signal: AbortSignal, maxBytes = MAX_BODY): Promise<Uint8Array | 'too-large'> {
   const reader = res.body?.getReader();
   if (!reader) return new Uint8Array();
   const stop = () => void reader.cancel().catch(() => undefined);
@@ -65,7 +65,7 @@ async function readCapped(res: Response, signal: AbortSignal): Promise<Uint8Arra
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > MAX_BODY) {
+      if (total > maxBytes) {
         await reader.cancel().catch(() => undefined);
         return 'too-large';
       }
@@ -131,7 +131,7 @@ export function createClient(opts: ClientOptions): Stack3Client {
 
   async function post(path: string, body: unknown): Promise<Result<unknown>> {
     if (!target.ok) return target;
-    const url = `${target.url.origin}${target.url.pathname.replace(/\/+$/, '')}${path}`;
+    const url = `${target.url.origin}${trimEndChars(target.url.pathname, '/')}${path}`;
     let last: Attempt;
     for (let attempt = 0; ; attempt++) {
       last = await postJsonOnce(fetchImpl, url, body, { 'x-stack3-client': `vscode/${version}` }, timeoutMs);

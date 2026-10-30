@@ -100,6 +100,34 @@ This file is kept separate from [`ARCHITECTURE.md`](./ARCHITECTURE.md). Each ent
 - **Evidence:** Task 8 parsers; test `lockfiles get a higher per-file cap`.
 - **Not covered:** A lockfile over 16 MiB is still truncated and reported as not fully checked.
 
+### D-12: Minimum VS Code version
+- **Status:** Accepted, 2026-10-30
+- **Decision:** `engines.vscode` stays `^1.90.0`.
+- **Why:** The code compiles against `@types/vscode` 1.90.0 with `tsc --noEmit` clean, so every API it uses exists in 1.90. `vsce` also refuses an `engines.vscode` newer than the types. The `vscode.git` extension API used for the staged-secret warning is read through our own narrow types and guarded, so its absence only turns that warning off.
+- **Evidence:** the `.vsix` installs in VS Code 1.142.0 and Cursor 3.18.9 on a fresh `--user-data-dir`/`--extensions-dir`; the integration suite runs in 1.142.0. It has not been run on 1.90 itself.
+- **Not covered:** behaviour on VS Code 1.90 to 1.141, which is assumed from the API levels and not tested.
+
+### D-13: Licence text (placeholder, needs the team's decision)
+- **Status:** Proposed, 2026-10-30
+- **Decision:** `LICENSE` says "All rights reserved" for evaluation at Hacker House Goa 2026, and `package.json` points at it (`SEE LICENSE IN LICENSE`). `private` stays `true`, which blocks `vsce publish` but not `vsce package`.
+- **Why:** Marketplace and `vsce` warn when a licence file is missing. Choosing an open licence, or a copyright holder's legal name, is the team's call, not mine.
+- **How to change:** replace `LICENSE`, set `license` to its SPDX id, and remove `"private": true` before the first `vsce publish`.
+
+### D-14: ReDoS check and what it changed
+- **Status:** Accepted, 2026-10-30
+- **Decision:** `npm run check:regexes` runs `recheck` over every regex literal and constant `new RegExp` in `src/`, found with the TypeScript parser. It fails the build on `vulnerable` or `unknown`. One pattern is allowed by name with its reason (`regexes.ts` base64 decode: a hard 200-character gap defeats the automaton checker). Three patterns built from templates at run time are listed, not checked.
+- **Found and fixed:** `/x+$/` trims (4 sites plus one in `indicators.ts`), the `.env` line parser, the `node -e` signal (cubic), the `SPAWN_OK` path pattern and the JSON web token redaction pattern. All were polynomial; the worst (`.npmrc` registry value) was quadratic over a line that could be 1 MiB. Each is now a loop or a linear pattern with a test in `test/engine/rules/redos.test.ts` and `test/verdict/redact.test.ts`.
+- **Behaviour change:** a JSON web token written directly after `-` or `_` (for example `x-eyJ...`) is no longer matched by the redactor, because the pattern now starts at the beginning of a token run.
+- **Not covered:** patterns built at run time (`src/ai/explain.ts`, the `rawIpUrl` copy in `source.ts`), which run on text capped at 4096 characters.
+
+### D-15: Socket package scan in the repo-scan service
+- **Status:** Accepted, 2026-10-30
+- **Decision:** `src/server/socket.ts` calls Socket's batch purl route with `alerts=true&purlErrors=true`. It uses `POST /v0/orgs/{org_slug}/purl` when `SOCKET_ORG_SLUG` is set and the deprecated `POST /v0/purl` otherwise. Only critical and high alerts in the `supplyChainRisk` and `vulnerability` categories become findings.
+- **Why:** The OpenAPI spec (api.socket.dev/v0/openapi) marks `/v0/purl` deprecated since 2026-01-05 and lists the org route as its replacement. Both need the `packages:list` scope. "Middle" alerts (network access, eval, shell use) fire on ordinary packages and would put most repositories at caution. A package without a verdict must never read as clean, so it is counted in `notChecked`.
+- **Evidence:** `test/server/socket.test.ts` (request shape, NDJSON parsing, severity filter, unresolved packages, failures, size and time caps), with a mutation check on the severity filter.
+- **Not covered:** a live call. The response shape comes from the spec, not from a real key. The backend's own Socket call (`app/modules/protection/scripts.py`) uses `GET /v0/purl?purl=`, which is not in the spec and may not work; that is the backend's to check.
+- **Cost:** up to 4 requests (400 quota units) per uncached scan of a repository with 1500+ packages; usually 1 (100 units). Results are cached for `CACHE_TTL_MS`.
+
 ## Verification results
 
 ### V-4: `task.allowAutomaticTasks` (verified 2026-10-30)
@@ -116,4 +144,16 @@ This file is kept separate from [`ARCHITECTURE.md`](./ARCHITECTURE.md). Each ent
 
 - V-1 to V-10 in the blueprint §0.5 must be verified, or accepted as risks here. V-4 is verified (above). V-1 needs a person.
 - Who owns server-side retention and logging of `/explain` and `/report` payloads?
-- What is the minimum `engines.vscode` version? It depends on which APIs ship (V-2, V-3).
+
+## Release checks (Task 19, 2026-10-30)
+
+Run on this machine with `npm run ci` (lint, `tsc`, 1179 tests, engine line coverage 99.5% against a floor of 90%, ReDoS check, build, bundle check), then `npm run package`.
+
+| Check | Result |
+|---|---|
+| Egress audit (`test/egress.test.ts`) | Clone, watcher, explain (API and local model) and report run against a repo with planted keys, a seed phrase and a canary. No planted value, local path or snippet over 300 characters appears in any request, and every request goes to the configured origin (or loopback for Ollama). Mutation check: with the redactor disabled the audit fails. |
+| Bundle check | No `eval(`, `new Function(`, string `setTimeout` or `innerHTML =` in `dist/*.js`. |
+| `.vsix` contents | 9 files, 240 KB: `dist/extension.js`, `dist/worker.js`, `dist/webview/*`, `package.json`, README, LICENSE. No sources, tests or server bundle. |
+| Install on a fresh profile | VS Code 1.142.0 and Cursor 3.18.9: installed and listed as `stack3.stack3-vscode@0.1.0`. This shows the package is accepted, not that every command was exercised in Cursor. |
+| Rehearsal 5 (canary, neutralized open) and 7 (XSS evidence as text) | Pass in a real VS Code 1.142.0 (`npm run test:integration`: 18/18 and 7/7). |
+| Rehearsal 1, 2, 3, 4, 6, 8 | Not run by hand. 1, 2, 4 and 8 have automated tests in the suite that pass but were not re-checked against this list; 3 (ten clean repos) and 6 (V-1) need a person. |

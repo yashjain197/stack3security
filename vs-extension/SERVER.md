@@ -14,7 +14,7 @@ docker run --rm -p 8080:8080 \
   stack3-repo-scan
 ```
 
-The service needs outbound HTTPS to github.com (to clone) and to `STACK3_API_URL` (to report). It needs a writable `/tmp`
+The service needs outbound HTTPS to github.com (to clone), to `STACK3_API_URL` (to report) and, when a Socket key is set, to api.socket.dev. It needs a writable `/tmp`
 (clones live there for the length of one scan and are deleted straight after). It runs as the unprivileged `node` user.
 
 | Variable | Default | Meaning |
@@ -26,6 +26,8 @@ The service needs outbound HTTPS to github.com (to clone) and to `STACK3_API_URL
 | `MAX_QUEUED_SCANS` | `8` | Waiting scans; beyond this the answer is `429 busy`. |
 | `SCAN_TIMEOUT_MS` | `90000` | Wall-clock limit for one request. |
 | `CACHE_TTL_MS` | `300000` | A finished scan of the same repo is reused for this long. |
+| `SOCKET_API_KEY` | none | Socket.dev token with the `packages:list` scope. Without it, repositories with packages come back as `unknown`. |
+| `SOCKET_ORG_SLUG` | none | Your Socket organisation slug. Set it to use the current `POST /v0/orgs/{slug}/purl` route; without it the deprecated `POST /v0/purl` is used. |
 
 ## Routes
 
@@ -71,7 +73,18 @@ report never fails the scan.
 - Every string in a response passes through the secret redactor.
 - Each clone is deleted after its scan, and again by an hourly sweep.
 
+## Package scan (Socket.dev)
+
+With `SOCKET_API_KEY` set, the package URLs found in the lockfiles (`pkg:npm/name@version`, nothing else) are sent to Socket in
+batches of 500, at most 4 batches per scan (2000 packages; each request costs 100 quota units). Socket's critical and high
+alerts in the `supplyChainRisk` and `vulnerability` categories become findings with source `socket`; the level is still
+computed here. Middle and low alerts, and licence, quality and maintenance alerts, are ignored: they fire on ordinary packages.
+
+A package Socket has no verdict for (`pendingScan`, `notFound`, a `purlError`, a failed batch, or past the 2000 cap) is counted
+in a `notChecked` line ("Package scan incomplete: N of M packages were not checked by Socket."), so the level is at least
+`unknown`. If every batch fails (bad key, missing scope, quota, outage) the line is "Package scan unavailable". The log has an
+`event: socket` line per scan with the counts and, on failure, the HTTP status; never the key.
+
 ## Not done yet
 
-Package-malware data (Socket) is not connected: a repository with packages comes back as `unknown` with "Package scan unavailable"
-in `notChecked`. Adding it means a Socket key and the batch purl call in `src/server/main.ts` (`scanPackages`).
+Nothing is left open in the service itself. The Socket call has been tested against recorded response shapes only, not a live key.

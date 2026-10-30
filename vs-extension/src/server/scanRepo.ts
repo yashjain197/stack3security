@@ -10,12 +10,15 @@ import { safeRelPath } from '../ui/paths';
 import { BusyError, type Limiter } from './limiter';
 import { toWireVerdict, type WireVerdict } from './wire';
 
+/** The package check's answer. `notChecked` carries what it could not check even though it answered. */
+export type PackageScan = Result<Finding[]> & { notChecked?: string[] };
+
 export interface ScanRepoDeps {
   makeDir(owner: string, repo: string): Promise<string>;
   clone(url: string, dest: string): Promise<Result<{ sha: string }>>;
   removeDir(dir: string): Promise<void>;
   scan(dir: string): Promise<EngineResult>;
-  scanPackages(purls: string[]): Promise<Result<Finding[]>>;
+  scanPackages(purls: string[]): Promise<PackageScan>;
   /** Best effort: a failure here never fails a scan. */
   report(r: GraphReport): Promise<unknown>;
   limiter: Limiter;
@@ -94,9 +97,10 @@ export function createRepoScanner(deps: ScanRepoDeps, opts: ScannerOptions): { s
           const { sha } = cloned.value;
 
           const local = await deps.scan(dir);
-          const remote = local.purls.length > 0 ? await deps.scanPackages(local.purls) : { ok: true as const, value: [] as Finding[] };
+          const remote: PackageScan = local.purls.length > 0 ? await deps.scanPackages(local.purls) : { ok: true, value: [] };
           const mismatch = ref !== undefined && !sha.startsWith(ref.toLowerCase());
-          const notChecked = mismatch ? [...local.notChecked, `Commit ${ref.toLowerCase()} was not scanned; the default branch tip ${sha.slice(0, 7)} was.`] : local.notChecked;
+          const notChecked = [...local.notChecked, ...(remote.ok ? remote.notChecked ?? [] : [])];
+          if (mismatch) notChecked.push(`Commit ${ref.toLowerCase()} was not scanned; the default branch tip ${sha.slice(0, 7)} was.`);
           const merged = { ...local, notChecked };
           const all = [...local.findings, ...(remote.ok ? remote.value : [])];
           const verdict = buildVerdict(merged, remote, { type: 'repo', id: `github.com/${owner}/${repo}@${sha.slice(0, 7)}` }, extractIndicators(all));

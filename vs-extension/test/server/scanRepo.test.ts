@@ -118,6 +118,13 @@ describe('the scan', () => {
     expect(r.ok && r.verdict.level).toBe('unknown');
     expect(r.ok && r.verdict.notChecked).toContain('Package scan unavailable');
   });
+  test('packages Socket answered only part of are said so, and the verdict is not clean', async () => {
+    const note = 'Package scan incomplete: 1 of 2 packages were not checked by Socket.';
+    const t = setup({ local: { findings: [], notChecked: [], purls: ['pkg:npm/a@1.0.0', 'pkg:npm/b@1.0.0'] }, scanPackages: vi.fn(async () => ({ ok: true as const, value: [], notChecked: [note] })) });
+    const r = await t.scanner.scan({ repoUrl: URL_ });
+    expect(r.ok && r.verdict.level).toBe('unknown');
+    expect(r.ok && r.verdict.notChecked).toContain(note);
+  });
   test('remote package findings can raise the level and are asked for only when there are packages', async () => {
     const malware: Finding = { ...f('critical', 'socket.malware'), layer: 'dependency', source: 'socket' };
     const t = setup({ local: { findings: [], notChecked: [], purls: ['pkg:npm/a@1.0.0'] }, scanPackages: vi.fn(async () => ({ ok: true as const, value: [malware] })) });

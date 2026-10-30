@@ -9,7 +9,8 @@ import { createApp } from './app';
 import { ConfigError, loadConfig } from './config';
 import { createLimiter } from './limiter';
 import { createReporter } from './reporter';
-import { createRepoScanner } from './scanRepo';
+import { createRepoScanner, type PackageScan } from './scanRepo';
+import { createSocketScanner } from './socket';
 
 const log = (event: Record<string, unknown>): void => console.log(JSON.stringify({ ts: new Date().toISOString(), ...event }));
 
@@ -22,6 +23,16 @@ function main(): void {
     process.exit(1);
   }
 
+  // Without a Socket key every repository with packages is reported as "Package scan unavailable" (so at best "unknown"),
+  // never as clean.
+  const socket = config.socket ? createSocketScanner(config.socket) : undefined;
+  const scanPackages = async (purls: string[]): Promise<PackageScan> => {
+    if (!socket) return { ok: false, reason: 'Package scan is not configured on this server.' };
+    const res = await socket(purls);
+    log({ event: 'socket', ok: res.ok, packages: purls.length, ...(res.ok ? { findings: res.value.length, incomplete: Boolean(res.notChecked?.length) } : { reason: res.reason }) });
+    return res;
+  };
+
   const reporter = createReporter({ apiUrl: config.apiUrl, serviceKey: config.serviceKey });
   const scanner = createRepoScanner(
     {
@@ -29,9 +40,7 @@ function main(): void {
       clone: (url, dest) => cloneRepo(url, dest),
       removeDir: removeQuarantined,
       scan: (dir) => runScan(dir, { mode: 'clone', checkedAt: new Date().toISOString() }, DEFAULT_LIMITS),
-      // Socket's package data needs its own key and API, which this service does not have yet. Until then every repository
-      // with packages is reported as "Package scan unavailable" (so at best "unknown"), never as clean.
-      scanPackages: async () => ({ ok: false, reason: 'Package scan is not configured on this server.' }),
+      scanPackages,
       report: async (r) => {
         const res = await reporter.report(r);
         log({ event: 'report', ok: res.ok, nodes: r.nodes.length, edges: r.edges.length, ...(res.ok ? { synced: res.value.synced } : { reason: res.reason }) });
@@ -46,7 +55,7 @@ function main(): void {
   server.headersTimeout = 10_000;
   server.requestTimeout = 20_000;
   server.keepAliveTimeout = 5_000;
-  server.listen(config.port, '0.0.0.0', () => log({ event: 'listening', port: config.port, apiUrl: config.apiUrl }));
+  server.listen(config.port, '0.0.0.0', () => log({ event: 'listening', port: config.port, apiUrl: config.apiUrl, socket: socket ? (config.socket?.orgSlug ? 'org' : 'legacy') : 'off' }));
 
   // Housekeeping: clones are removed after every scan; this catches any left by a crash.
   const sweep = () => void sweepQuarantine(1).catch(() => undefined);

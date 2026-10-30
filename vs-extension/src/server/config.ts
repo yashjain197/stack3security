@@ -1,3 +1,5 @@
+import { trimEndChars } from '../engine/rules/evidence';
+
 export class ConfigError extends Error {}
 
 export interface ServerConfig {
@@ -10,6 +12,8 @@ export interface ServerConfig {
   maxQueue: number;
   scanTimeoutMs: number;
   cacheTtlMs: number;
+  /** Socket.dev package data. Absent when no key is set; every repository with packages is then reported as not fully checked. */
+  socket?: { apiKey: string; orgSlug?: string };
 }
 
 function integer(env: Record<string, string | undefined>, name: string, fallback: number, min: number, max: number): number {
@@ -37,7 +41,15 @@ export function loadConfig(env: Record<string, string | undefined>): ServerConfi
       throw new ConfigError('STACK3_API_URL must be an http or https URL.');
     }
     if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password) throw new ConfigError('STACK3_API_URL must be an http or https URL without credentials.');
-    apiUrl = `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+    apiUrl = `${url.origin}${trimEndChars(url.pathname, '/')}`;
+  }
+
+  let socket: ServerConfig['socket'];
+  if (env.SOCKET_API_KEY) {
+    if (env.SOCKET_API_KEY.length > 200 || /\s/.test(env.SOCKET_API_KEY)) throw new ConfigError('SOCKET_API_KEY is not a valid key.');
+    const slug = env.SOCKET_ORG_SLUG;
+    if (slug && !/^[A-Za-z0-9._-]{1,100}$/.test(slug)) throw new ConfigError('SOCKET_ORG_SLUG is not a valid organisation slug.');
+    socket = { apiKey: env.SOCKET_API_KEY, ...(slug ? { orgSlug: slug } : {}) };
   }
 
   return {
@@ -48,5 +60,6 @@ export function loadConfig(env: Record<string, string | undefined>): ServerConfi
     maxQueue: integer(env, 'MAX_QUEUED_SCANS', 8, 0, 100),
     scanTimeoutMs: integer(env, 'SCAN_TIMEOUT_MS', 90_000, 1000, 600_000),
     cacheTtlMs: integer(env, 'CACHE_TTL_MS', 300_000, 0, 3_600_000),
+    ...(socket ? { socket } : {}),
   };
 }
