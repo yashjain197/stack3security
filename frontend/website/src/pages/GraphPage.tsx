@@ -214,8 +214,7 @@ export function GraphPage() {
           <div className="eyebrow">THREAT INTELLIGENCE</div>
           <h1>Threat graph</h1>
           <p>
-            Look up a wallet, domain, package, repo, or endpoint and see what it is connected to. Live data — not
-            a demo.
+            Look up a wallet, domain, package, repo, or endpoint and see what it is connected to.
           </p>
         </div>
       </div>

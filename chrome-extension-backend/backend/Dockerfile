@@ -2,11 +2,11 @@
 # Made by Yash Jain with passion.
 
 FROM python:3.12-slim AS builder
-ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_DEFAULT_TIMEOUT=600
 WORKDIR /build
 COPY pyproject.toml ./
 COPY app ./app
-RUN python -m venv /opt/venv && /opt/venv/bin/pip install .
+RUN python -m venv /opt/venv && /opt/venv/bin/pip install --retries 20 .
 
 FROM python:3.12-slim
 ENV PATH="/opt/venv/bin:$PATH" \

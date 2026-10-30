@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 const root = resolve(fileURLToPath(new URL("./dist", import.meta.url)));
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "127.0.0.1";
+const apiBaseUrl = (process.env.API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const scanApiBaseUrl = (process.env.SCAN_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -25,7 +27,26 @@ createServer(async (request, response) => {
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
     });
-    response.end(JSON.stringify({ apiBaseUrl: process.env.API_BASE_URL ?? "http://localhost:8000" }));
+    response.end(JSON.stringify({ apiBaseUrl, scanApiBaseUrl }));
+    return;
+  }
+  // The scan service is service-key protected and sends no CORS headers, so the
+  // browser cannot reach it. Proxy only its public health endpoint server-side.
+  if (pathname === "/scan-health") {
+    const headers = {
+      "Content-Type": contentTypes[".json"],
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    };
+    try {
+      const upstream = await fetch(`${scanApiBaseUrl}/healthz`, { signal: AbortSignal.timeout(10000) });
+      const body = await upstream.json();
+      response.writeHead(upstream.ok ? 200 : 502, headers);
+      response.end(JSON.stringify(upstream.ok ? body : { status: "error" }));
+    } catch {
+      response.writeHead(502, headers);
+      response.end(JSON.stringify({ status: "unreachable" }));
+    }
     return;
   }
   let decodedPathname;

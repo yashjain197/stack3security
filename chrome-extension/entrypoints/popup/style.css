@@ -134,6 +134,40 @@ body {
   gap: 8px;
 }
 
+.popup-wallet-review {
+  padding: 12px;
+  border: 1px solid #f4c7c3;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.popup-wallet-review > strong {
+  font-size: 13px;
+}
+
+.popup-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.popup-facts div {
+  display: flex;
+  gap: 8px;
+}
+
+.popup-facts dt {
+  flex: 0 0 64px;
+  color: #697586;
+}
+
+.popup-facts dd {
+  margin: 0;
+  word-break: break-all;
+}
+
 .popup-account {
   flex-direction: row;
   justify-content: space-between;
