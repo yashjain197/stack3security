@@ -16,6 +16,7 @@ describe('settings contract', () => {
       'stack3.explain.provider',
       'stack3.explain.sendSnippets',
       'stack3.report.mode',
+      'stack3.scan.exclude',
       'stack3.scan.limits',
     ]);
   });
@@ -71,6 +72,25 @@ describe('settings contract', () => {
     expect(DEFAULT_LIMITS).toEqual({
       maxFiles: 20000, maxFileBytes: 1048576, maxTotalBytes: 52428800, maxDepth: 32, timeoutMs: 30000,
     });
+  });
+
+  test('scan.exclude: only the user value is read, and a repo cannot set it', () => {
+    __setInspect('stack3', 'scan.exclude', { defaultValue: {}, workspaceFolderValue: { '/tmp/x': ['dist'] }, workspaceValue: { '/tmp/x': ['dist'] } });
+    expect(getSettings().scanExclude).toEqual({});
+    __setInspect('stack3', 'scan.exclude', { defaultValue: {}, globalValue: { '/home/me/proj': ['test/fixtures/**', 'dist'] } });
+    expect(getSettings().scanExclude).toEqual({ '/home/me/proj': ['test/fixtures', 'dist'] });
+  });
+
+  test('scan.exclude: unusable entries are dropped, not trusted', () => {
+    __setInspect('stack3', 'scan.exclude', {
+      defaultValue: {},
+      globalValue: { relative: ['dist'], '/ok': ['../escape', '/abs', '*.js', 'good', 7], '/notarray': 'dist', '/empty': [] },
+    });
+    expect(getSettings().scanExclude).toEqual({ '/ok': ['good'] });
+    for (const bad of ['text', 42, ['dist'], null]) {
+      __setInspect('stack3', 'scan.exclude', { defaultValue: {}, globalValue: bad });
+      expect(getSettings().scanExclude).toEqual({});
+    }
   });
 
   test('invalid user limit values fall back to defaults', () => {
