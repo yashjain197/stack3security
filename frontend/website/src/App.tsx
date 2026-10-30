@@ -76,7 +76,7 @@ function StartupErrorBanner({ error }: { error: ApiError | null }) {
   if (!error || signedIn) return null;
   return (
     <div className="account-message account-message--error" role="alert">
-      {errorMessage(error)} Account services are unavailable; scanning pages remain illustrative demos.
+      {errorMessage(error)} Account services are unavailable, so live scans cannot run until the API is reachable.
     </div>
   );
 }

@@ -1,46 +1,49 @@
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { Badge, DemoBanner, FindingCard, Limitations, PageHeading } from "../components/ui";
-import { ReportTable } from "../components/results";
-import { getReport } from "../lib/security-service";
-import { reports } from "../lib/mock-data";
+import { PageHeading } from "../components/ui";
+import { ReportTable, VerdictPanel } from "../components/results";
+import { chainName } from "../lib/chains";
+import { scanKindLabels, useScanHistory } from "../lib/scans";
+import { useSession } from "../lib/session";
 
 export function ReportsPage() {
+  const { user } = useSession();
+  const { records, clear } = useScanHistory(user?.id);
   const [params] = useSearchParams();
-  const target = params.get("target");
-  const report = target ? getReport(target) : null;
+  const [confirming, setConfirming] = useState(false);
+  const id = params.get("id");
+  const record = id ? records.find((item) => item.id === id) : null;
 
   let detail;
-  if (report) {
+  if (record) {
     detail = (
-      <section className="report-detail panel">
-        <div className="report-detail-header">
-          <div>
-            <div className="result-label">ILLUSTRATIVE DEMO REPORT</div>
-            <h2>{report.target}</h2>
-            <p>{report.type} · {report.date}</p>
-          </div>
-          <Badge verdict={report.verdict} />
-        </div>
-        <p className="report-summary">{report.detail}</p>
-        <div className="report-findings">
-          <strong>{report.findings} {report.findings === 1 ? "finding" : "findings"}</strong>
-          <span>Evidence, sources, and recommendations are illustrative.</span>
-        </div>
-        {report.findingDetails.map((finding, index) => (
-          <FindingCard key={finding.title} finding={finding} index={index + 1} />
-        ))}
-        <Limitations items={report.notChecked} />
+      <>
+        <VerdictPanel
+          verdict={record.verdict}
+          label={`${scanKindLabels[record.kind].toUpperCase()} SCAN · ${new Date(record.createdAt).toLocaleString()}`}
+          title={record.target}
+          subtitle={record.chainId ? chainName(record.chainId) : undefined}
+        />
         <Link to="/dashboard/reports" className="text-link"><Icon name="arrow" /> Back to all reports</Link>
-      </section>
+      </>
     );
-  } else if (target) {
+  } else if (id) {
     detail = (
       <div className="empty-state">
         <span className="empty-state-icon"><Icon name="file" /></span>
         <h2>Report not found</h2>
-        <p>This target is not included in the local demo report set.</p>
+        <p>This scan is not in this browser's history. It may have been cleared or run on another device.</p>
         <Link className="button button--secondary" to="/dashboard/reports">View all reports</Link>
+      </div>
+    );
+  } else if (!records.length) {
+    detail = (
+      <div className="empty-state">
+        <span className="empty-state-icon"><Icon name="file" /></span>
+        <h2>No scans yet</h2>
+        <p>Scan a website, contract or wallet request and the live result is saved here.</p>
+        <Link className="button button--primary" to="/dashboard/scanner">Scan a website</Link>
       </div>
     );
   } else {
@@ -49,21 +52,28 @@ export function ReportsPage() {
         <div className="panel-header">
           <div>
             <h2>Recent scan reports</h2>
-            <p>Review what was checked, what was found, and what remains unknown.</p>
+            <p>Your last {records.length} live {records.length === 1 ? "scan" : "scans"}, saved in this browser.</p>
           </div>
+          {confirming ? (
+            <span className="inline-actions">
+              <button type="button" className="button button--secondary" onClick={() => setConfirming(false)}>Keep</button>
+              <button type="button" className="button button--danger" onClick={() => { clear(); setConfirming(false); }}>Clear history</button>
+            </span>
+          ) : (
+            <button type="button" className="button button--secondary" onClick={() => setConfirming(true)}>Clear history</button>
+          )}
         </div>
-        <ReportTable items={reports} />
+        <ReportTable items={records} />
       </section>
     );
   }
 
   return (
     <>
-      <DemoBanner />
       <PageHeading
         eyebrow="YOUR SECURITY WORKSPACE"
         title="Scan reports"
-        subtitle="Review findings, evidence, and checks not performed."
+        subtitle="Findings, evidence, and checks not performed for every scan you run."
       />
       {detail}
     </>

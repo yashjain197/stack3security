@@ -13,6 +13,7 @@ import { LoginPage } from "./LoginPage";
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 test("settings render live entitlements and escape API text", async () => {
@@ -20,13 +21,17 @@ test("settings render live entitlements and escape API text", async () => {
     path.startsWith("/health")
       ? { status: "ok", checks: { database: "ok", redis: "ok" } }
       : { ...me, user: { ...me.user, email: '<script>alert("x")</script>' } };
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 })));
   const { container } = renderPage("/dashboard/settings", <SettingsPage />, makeApi(request), "/dashboard/settings");
   await screen.findByText("Account settings");
   expect(container.textContent).toContain("repo_scan: 20 / month");
   expect(container.textContent).toContain('<script>alert("x")</script>');
   expect(container.querySelector("script")).toBeNull();
-  expect(container.textContent).toContain("Scanning remains illustrative");
+  expect(container.textContent).toContain("Live scanning");
   expect(container.textContent).toContain("database: ok, redis: ok");
+  expect(fetch).toHaveBeenCalledWith("/scan-health", expect.objectContaining({ cache: "no-store" }));
+  expect(container.textContent).toContain("VS Code scan service:");
+  expect(container.textContent).not.toContain("Cannot reach the VS Code scan service");
 });
 
 test("pricing uses catalog prices, availability, trial days and minimum seats", async () => {

@@ -28,7 +28,7 @@ export function LandingPage() {
           </div>
           <div className="hero-note">
             <Icon name="lock" />
-            <span>Demo experience — checks shown in the dashboard are illustrative until live scanning is connected.</span>
+            <span>Every dashboard check runs live against the Stack3 API. Results are risk indicators, not a guarantee of safety.</span>
           </div>
         </div>
         <div className="hero-visual" aria-label="Illustration of a website request and its security findings">
@@ -75,7 +75,7 @@ export function LandingPage() {
               </div>
               <div className="visual-foot">
                 <Badge verdict="high" />
-                <span>Illustrative example</span>
+                <span>Example</span>
               </div>
             </div>
           </div>
@@ -118,7 +118,7 @@ export function LandingPage() {
               Review suspicious page behavior, recovery-phrase phishing signals, transaction requests, and
               available smart-contract risk indicators.
             </p>
-            <Link to="/dashboard/scanner" className="text-link">Try the sample scanner <Icon name="arrow" /></Link>
+            <Link to="/dashboard/scanner" className="text-link">Scan a website <Icon name="arrow" /></Link>
           </article>
         </div>
       </section>
@@ -133,11 +133,11 @@ export function LandingPage() {
           <p className="intent-disclaimer">
             An approval is not automatically malicious. The spender, scope, contract behavior, and context matter.
           </p>
-          <Link className="text-link" to="/dashboard/transactions">Review the example</Link>
+          <Link className="text-link" to="/dashboard/transactions">Review a wallet request</Link>
         </div>
         <div className="intent-card">
           <div className="intent-card-header">
-            <span>ILLUSTRATIVE EXAMPLE</span>
+            <span>EXAMPLE</span>
             <Badge verdict="high" />
           </div>
           <div className="intent-row">
@@ -228,8 +228,8 @@ export function LandingPage() {
         <span className="eyebrow">MAKE YOUR NEXT DECISION WITH BETTER INFORMATION</span>
         <h2>See what's underneath.</h2>
         <p>
-          Explore the Stack3 demo and see how code, website, and transaction risks can be explained in one clear
-          experience.
+          Scan a website, contract, or wallet request and see code, website, and transaction risks explained in one
+          clear experience.
         </p>
         <Link className="button button--light button--large" to="/dashboard">
           Open the dashboard<Icon name="arrow" />

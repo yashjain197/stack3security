@@ -59,7 +59,7 @@ export function PublicFooter() {
         Stack3 Security provides risk indicators and security information, not a guarantee that software,
         websites, transactions, or smart contracts are safe. Always review wallet requests carefully.
       </p>
-      <span className="footer-copy">© Stack3 Security · Demo experience</span>
+      <span className="footer-copy">© Stack3 Security</span>
     </footer>
   );
 }
