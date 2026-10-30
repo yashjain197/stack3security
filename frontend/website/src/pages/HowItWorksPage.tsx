@@ -20,7 +20,7 @@ export function HowItWorksPage() {
           with Web3 websites and wallet requests.
         </p>
         <Link className="button button--primary button--large" to="/dashboard">
-          Explore the demo<Icon name="arrow" />
+          Open the dashboard<Icon name="arrow" />
         </Link>
       </section>
       <section className="steps-list">

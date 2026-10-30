@@ -20,6 +20,8 @@ services:
       context: ./frontend/website
     environment:
       API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+      # server.js calls this service-to-service to proxy /scan-health
+      SCAN_API_BASE_URL: ${SCAN_API_BASE_URL:-http://vscode-api:8080}
     restart: unless-stopped
     init: true
     read_only: true
@@ -32,6 +34,8 @@ services:
       - "127.0.0.1:${WEBPAGE_PORT:-3000}:3000"
     depends_on:
       chrome-api:
+        condition: service_started
+      vscode-api:
         condition: service_started
 
   redis:

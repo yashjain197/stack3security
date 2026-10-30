@@ -104,6 +104,37 @@ export type TabCheckResult = {
   errors: string[];
 };
 
+// Facts the MAIN-world hook reads through the wallet's own RPC before the prompt opens.
+// Kept apart from TxReview because the API rejects unknown fields.
+export type ContractFacts = {
+  address: string | null;
+  isContract: boolean | null;
+  token: { address: string; name?: string; symbol?: string; decimals?: number } | null;
+};
+
+export type SourcifyInfo = { verified: boolean; name: string | null; match: string | null };
+
+// What the background answers when a wallet request is reviewed.
+export type WalletReviewResult = {
+  review: TxReview;
+  facts: ContractFacts | null;
+  receivedAt: number;
+  linked: boolean;
+  tx: Verdict | null;
+  contract: Verdict | null;
+  sourcify: SourcifyInfo | null;
+  errors: string[];
+};
+
+// A phishing warning pushed from the background to the page's content script.
+export type PageAlert = {
+  origin: string;
+  host: string;
+  level: Level;
+  reasons: string[];
+  detailsUrl: string;
+};
+
 // Messages between popup/content and the background worker.
 export type ExtensionMessage =
   | { type: "page-capture"; capture: PageCapture }
@@ -113,4 +144,10 @@ export type ExtensionMessage =
   | { type: "unlink" }
   | { type: "check-tab"; tabId: number; url: string }
   | { type: "scan-contract"; chainId: number; address: string }
-  | { type: "review-tx"; review: TxReview };
+  | { type: "review-tx"; review: TxReview }
+  | { type: "wallet-request"; review: TxReview; facts: ContractFacts | null }
+  | { type: "get-wallet-review"; tabId: number | null }
+  | { type: "dismiss-page-alert"; origin: string };
+
+// Messages from the background to a tab's content script.
+export type TabMessage = { type: "page-alert"; alert: PageAlert };

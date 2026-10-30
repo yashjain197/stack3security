@@ -9,6 +9,11 @@ export default defineConfig({
     name: "Stack3 Security",
     description: "Verify what happens underneath websites, transactions, and contracts before you act.",
     permissions: ["activeTab", "tabs", "storage", "alarms"],
-    host_permissions: ["https://stack3security.onrender.com/*", "http://localhost:8000/*"],
+    host_permissions: [
+      "https://chrome-ext-backend.stack3security.workers.dev/*",
+      "http://localhost:8000/*",
+      // Public contract verification lookups for the pre-signing review.
+      "https://sourcify.dev/*",
+    ],
   },
 });

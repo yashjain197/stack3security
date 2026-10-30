@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { levelLabels, WEBSITE_URL } from "../../utils/api";
-import type { LinkStart, TabCheckResult, Verdict } from "../../utils/types";
+import { contractDetailsUrl, levelLabels, WEBSITE_URL } from "../../utils/api";
+import { chainName } from "../../utils/chains";
+import { shortAddress, subjectContractOf, summarizeReview } from "../../utils/decode";
+import type { LinkStart, TabCheckResult, Verdict, WalletReviewResult } from "../../utils/types";
 
 type BackgroundReply<T> = { ok: true; data: T } | { ok: false; error: string; code?: string; status?: number };
 
@@ -12,8 +14,21 @@ class PopupError extends Error {
   }
 }
 
-async function ask<T>(message: Record<string, unknown>): Promise<T> {
-  const reply = (await browser.runtime.sendMessage(message)) as BackgroundReply<T>;
+async function ask<T>(message: Record<string, unknown>, attempt = 0): Promise<T> {
+  let reply: BackgroundReply<T>;
+  try {
+    reply = (await browser.runtime.sendMessage(message)) as BackgroundReply<T>;
+  } catch (caught) {
+    // Right after an install, update, or reload the service worker may still be
+    // starting; "Receiving end does not exist" resolves itself on a short retry.
+    if (attempt < 2 && /receiving end does not exist/i.test(String((caught as Error).message))) {
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      return ask<T>(message, attempt + 1);
+    }
+    throw new PopupError(
+      "Cannot reach the extension's background worker. Reload the extension from chrome://extensions, then reopen this popup.",
+    );
+  }
   if (!reply) throw new PopupError("The background worker did not answer. Try reopening the popup.");
   if (!reply.ok) throw new PopupError(reply.error, reply.code);
   return reply.data;
@@ -21,6 +36,46 @@ async function ask<T>(message: Record<string, unknown>): Promise<T> {
 
 type Status = { linked: boolean; email: string | null; apiBaseUrl: string };
 type LinkState = { details: LinkStart; email: string | null; error: string | null } | null;
+
+function WalletReviewCard({ result }: { result: WalletReviewResult }) {
+  const { review } = result;
+  const summary = summarizeReview(review, result.facts);
+  const target = subjectContractOf(review);
+  const detailsUrl = contractDetailsUrl(review.chainId, target);
+  const facts: [string, string][] = [["Chain", chainName(review.chainId)]];
+  if (review.origin) facts.push(["Site", review.origin.replace(/^https?:\/\//, "")]);
+  if (target) facts.push(["Contract", shortAddress(target)]);
+  if (result.sourcify) {
+    facts.push(["Source", result.sourcify.verified ? `Verified${result.sourcify.name ? ` (${result.sourcify.name})` : ""}` : "Not verified on Sourcify"]);
+  }
+  if (review.message) facts.push(["Message", review.message.slice(0, 120)]);
+
+  return (
+    <section className="popup-section popup-wallet-review">
+      <strong>Last wallet request: {summary.title}</strong>
+      <p className="popup-note">{summary.description}</p>
+      {summary.warnings.map((warning) => (
+        <p className="popup-error" key={warning.text}>{warning.text}</p>
+      ))}
+      <dl className="popup-facts">
+        {facts.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {result.tx ? <VerdictCard title="Transaction review" verdict={result.tx} /> : null}
+      {result.contract ? <VerdictCard title="Contract" verdict={result.contract} /> : null}
+      {result.errors.map((message) => (
+        <p className="popup-error" key={message}>{message}</p>
+      ))}
+      <a className="popup-button" href={detailsUrl} target="_blank" rel="noreferrer">
+        Full details on the Stack3 website
+      </a>
+    </section>
+  );
+}
 
 function VerdictCard({ title, verdict }: { title: string; verdict: Verdict }) {
   return (
@@ -61,6 +116,8 @@ export function App() {
   const [contractAddress, setContractAddress] = useState("");
   const [contractChain, setContractChain] = useState("1");
   const [contractVerdict, setContractVerdict] = useState<Verdict | null>(null);
+  const [walletReview, setWalletReview] = useState<WalletReviewResult | null>(null);
+  const [walletReviewPending, setWalletReviewPending] = useState(true);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -72,9 +129,16 @@ export function App() {
 
   useEffect(() => {
     void refreshStatus();
-    browser.tabs.query({ active: true, currentWindow: true }).then(([active]) => {
+    browser.tabs.query({ active: true, currentWindow: true }).then(async ([active]) => {
       if (active?.id !== undefined && active.url && /^https?:/.test(active.url)) {
         setTab({ id: active.id, url: active.url });
+      }
+      try {
+        setWalletReview(await ask<WalletReviewResult | null>({ type: "get-wallet-review", tabId: active?.id ?? null }));
+      } catch {
+        // No pending wallet request to show.
+      } finally {
+        setWalletReviewPending(false);
       }
     });
   }, [refreshStatus]);
@@ -172,6 +236,12 @@ export function App() {
           ) : null}
           {errorCode === "unauthorized" ? " Link this device again." : null}
         </p>
+      ) : null}
+
+      {walletReviewPending ? (
+        <p className="popup-note" role="status">Checking for wallet requests…</p>
+      ) : walletReview ? (
+        <WalletReviewCard result={walletReview} />
       ) : null}
 
       {!linked ? (

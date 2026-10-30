@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { ApiError } from "../lib/api";
+import { errorMessage } from "../lib/session";
 import type { Finding, Verdict } from "../types";
-import { demoNotice } from "../lib/mock-data";
-import { Icon } from "./Icon";
 
 export function verdictLabel(verdict: string): string {
   return {
@@ -22,12 +23,34 @@ export function Badge({ verdict }: { verdict: Verdict | string }) {
   );
 }
 
-export function DemoBanner({ text = demoNotice }: { text?: string }) {
+const layerLabels: Record<string, string> = {
+  "repo-file": "Repository",
+  dependency: "Dependency",
+  secret: "Secret",
+  site: "Website",
+  contract: "Contract",
+  tx: "Transaction",
+  intent: "Signature intent",
+  graph: "Threat graph",
+};
+
+const sourceLabels: Record<string, string> = {
+  rules: "Stack3 rules",
+  graph: "Stack3 threat graph",
+  socket: "Socket",
+  sourcify: "Sourcify",
+};
+
+/** A failed live check, with the next step when the API says what is missing. */
+export function ScanError({ error }: { error: Error | null }) {
+  if (!error) return null;
   return (
-    <div className="demo-banner">
-      <Icon name="shield" />
-      <span>{text}</span>
-    </div>
+    <p className="form-error" role="alert">
+      {errorMessage(error)}
+      {error instanceof ApiError && error.code === "feature_required" ? (
+        <> <Link to="/pricing">View plans</Link></>
+      ) : null}
+    </p>
   );
 }
 
@@ -57,9 +80,9 @@ export function FindingCard({ finding, index = 1 }: { finding: Finding; index?: 
   return (
     <article className="finding-card">
       <div className="finding-card-top">
-        <span className="finding-index">0{index}</span>
+        <span className="finding-index">{String(index).padStart(2, "0")}</span>
         <Badge verdict={finding.severity} />
-        <span className="finding-layer">{finding.layer} signal</span>
+        <span className="finding-layer">{layerLabels[finding.layer] ?? finding.layer} signal</span>
       </div>
       <h3>{finding.title}</h3>
       <p>{finding.evidence}</p>
@@ -68,12 +91,16 @@ export function FindingCard({ finding, index = 1 }: { finding: Finding; index?: 
         <div className="technical-body">
           <div>
             <strong>Evidence source</strong>
-            <span>{finding.source ?? "Not available in demo"}</span>
+            <span>{sourceLabels[finding.source] ?? finding.source}</span>
           </div>
-          {finding.recommendation ? (
+          <div>
+            <strong>Checked</strong>
+            <span>{new Date(finding.checkedAt).toLocaleString()}</span>
+          </div>
+          {finding.location?.file ? (
             <div>
-              <strong>Recommended action</strong>
-              <span>{finding.recommendation}</span>
+              <strong>Location</strong>
+              <span>{finding.location.file}{finding.location.line ? `:${finding.location.line}` : ""}</span>
             </div>
           ) : null}
         </div>
@@ -83,6 +110,7 @@ export function FindingCard({ finding, index = 1 }: { finding: Finding; index?: 
 }
 
 export function Limitations({ items }: { items: string[] }) {
+  if (!items.length) return null;
   return (
     <div className="limitations">
       <h3>Checks not performed</h3>

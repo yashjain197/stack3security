@@ -1,9 +1,11 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { DemoBanner, PageHeading, Spinner } from "../components/ui";
-import { ScanResultPanel } from "../components/results";
-import { scanWebsite } from "../lib/security-service";
-import type { ScanResult } from "../types";
+import { PageHeading, ScanError, Spinner } from "../components/ui";
+import { VerdictPanel } from "../components/results";
+import { useApi, useSession } from "../lib/session";
+import { checkWebsite, normalizeDomain, saveScan } from "../lib/scans";
+import type { ScanRecord } from "../types";
 
 function CheckItem({ text }: { text: string }) {
   return (
@@ -15,46 +17,74 @@ function CheckItem({ text }: { text: string }) {
 }
 
 export function ScannerPage() {
-  const [error, setError] = useState("");
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const api = useApi();
+  const { user } = useSession();
+  const [params, setParams] = useSearchParams();
+  const [error, setError] = useState<Error | null>(null);
+  const [record, setRecord] = useState<ScanRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const controller = useRef<AbortController | null>(null);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  const run = useCallback(async (input: string) => {
+    controller.current?.abort();
+    const current = new AbortController();
+    controller.current = current;
+    setError(null);
+    setRecord(null);
+    let domain: string;
+    try {
+      domain = normalizeDomain(input);
+    } catch (caught) {
+      setError(caught as Error);
+      return;
+    }
+    setBusy(true);
+    try {
+      const verdict = await checkWebsite(api, domain, current.signal);
+      if (!current.signal.aborted) setRecord(saveScan(user?.id ?? "anonymous", "website", domain, verdict));
+    } catch (caught) {
+      if (!current.signal.aborted) setError(caught as Error);
+    } finally {
+      if (!current.signal.aborted) setBusy(false);
+    }
+  }, [api, user?.id]);
+
+  // /dashboard/scanner?domain=example.com scans straight away (used by the browser extension).
+  const linked = params.get("domain");
+  useEffect(() => {
+    if (!linked) return;
+    if (inputRef.current) inputRef.current.value = linked;
+    void run(linked);
+    return () => controller.current?.abort();
+  }, [linked, run]);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    setError("");
-    setResult(null);
-    setBusy(true);
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    try {
-      setResult(scanWebsite(inputRef.current?.value ?? ""));
-    } catch (caught) {
-      setError((caught as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    const value = inputRef.current?.value ?? "";
+    if (linked && value.trim() !== linked) setParams({}, { replace: true });
+    void run(value);
   }
 
   return (
     <>
-      <DemoBanner />
       <PageHeading
         eyebrow="WEB3 GUARD"
         title="Website risk scanner"
-        subtitle="Inspect a domain for suspicious identity, page behavior, and recovery-phrase requests."
+        subtitle="Check a domain against the Stack3 phishing blocklists, threat graph and wallet-brand lookalike rules."
       />
       <div className="scanner-layout">
         <section className="panel scanner-form-panel">
           <div className="panel-header">
             <div>
-              <span className="feature-kicker">DEMO SCAN</span>
+              <span className="feature-kicker">LIVE SCAN</span>
               <h2>Inspect a website</h2>
-              <p>Try the sample fixture to see how findings and evidence are presented.</p>
+              <p>Enter any URL or domain. Only the hostname is sent to the Stack3 API.</p>
             </div>
             <span className="scanner-icon"><Icon name="scan" /></span>
           </div>
-          <form id="scanner-form" className="form-stack" noValidate onSubmit={(event) => void submit(event)}>
+          <form id="scanner-form" className="form-stack" noValidate onSubmit={submit}>
             <label htmlFor="website-url">Website URL</label>
             <div className="input-with-icon">
               <Icon name="external" />
@@ -65,43 +95,52 @@ export function ScannerPage() {
                 inputMode="url"
                 autoComplete="url"
                 placeholder="https://example.com"
-                aria-describedby="scanner-helper scanner-error"
+                aria-describedby="scanner-error"
+                defaultValue={linked ?? ""}
                 ref={inputRef}
               />
               <button className="button button--primary" type="submit" disabled={busy}>
                 {busy ? <>
-                  <Spinner />Checking sample…
+                  <Spinner />Scanning…
                 </> : <>
                   Scan website <Icon name="arrow" />
                 </>}
               </button>
             </div>
-            <small id="scanner-helper" className="input-helper">Sample supported: demo-recovery-site.test</small>
-            <p id="scanner-error" className="form-error" role="alert" hidden={!error}>{error}</p>
+            <div id="scanner-error"><ScanError error={error} /></div>
           </form>
           <div className="privacy-note">
             <Icon name="lock" />
-            <span>Never enter a seed phrase or private key. This sample scan does not send the entered URL to the API.</span>
+            <span>Never enter a seed phrase or private key anywhere. For live page-behavior checks while you browse, use the Stack3 browser extension.</span>
           </div>
         </section>
         <section className="panel inspection-panel">
           <div className="panel-header">
             <div>
-              <h2>What the scanner may inspect</h2>
-              <p>Checks depend on available signals and supported data.</p>
+              <h2>What this scan checks</h2>
+              <p>Results come from the live Stack3 API.</p>
             </div>
           </div>
           <ul className="check-list">
-            <CheckItem text="Lookalike or suspicious domain patterns" />
-            <CheckItem text="Recovery-phrase or private-key prompts" />
-            <CheckItem text="Suspicious form destinations" />
-            <CheckItem text="Wallet-brand impersonation signals" />
-            <CheckItem text="Relevant page-script indicators, when supported" />
+            <CheckItem text="Known phishing and drainer blocklists" />
+            <CheckItem text="Reports in the Stack3 threat graph" />
+            <CheckItem text="Wallet-brand lookalike and homoglyph domains" />
+            <CheckItem text="Domain age and registration data, when available" />
           </ul>
         </section>
       </div>
       <section id="scanner-result" className="result-region" aria-live="polite">
-        {result ? <ScanResultPanel result={result} /> : null}
+        {record ? (
+          <VerdictPanel
+            verdict={record.verdict}
+            label={`LIVE SCAN · ${new Date(record.createdAt).toLocaleString()}`}
+            title={record.target}
+          >
+            <Link className="text-link" to={`/dashboard/graph?type=domain&id=${encodeURIComponent(record.target)}`}>
+              Open in the threat graph <Icon name="arrow" />
+            </Link>
+          </VerdictPanel>
+        ) : null}
       </section>
     </>
   );

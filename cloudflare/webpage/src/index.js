@@ -10,7 +10,8 @@ export class WebContainer extends Container {
       PORT: "3000",
       HOST: "0.0.0.0",
       NODE_ENV: "production",
-      API_BASE_URL: env.API_BASE_URL,
+      API_BASE_URL: env.API_BASE_URL || "https://chrome-ext-backend.stack3security.workers.dev",
+      SCAN_API_BASE_URL: env.SCAN_API_BASE_URL || "https://vs-ext-backend.stack3security.workers.dev",
     };
   }
 }
