@@ -76,6 +76,38 @@ export function Spinner() {
   return <span className="spinner" aria-hidden="true"></span>;
 }
 
+/** A shimmering placeholder bar; `width` is any CSS width. */
+export function Skeleton({ width = "100%", height = 12 }: { width?: string; height?: number }) {
+  return <span className="skeleton" style={{ width, height }} aria-hidden="true" />;
+}
+
+/** Placeholder in the shape of a scan report, shown while a live check runs. */
+export function ResultSkeleton({ label }: { label: string }) {
+  return (
+    <section className="result-panel result-skeleton" role="status" aria-label={label}>
+      <div className="result-header">
+        <div className="skeleton-stack">
+          <Skeleton width="140px" height={10} />
+          <Skeleton width="min(320px, 70%)" height={18} />
+        </div>
+        <Skeleton width="84px" height={24} />
+      </div>
+      <div className="skeleton-stack skeleton-stack--body">
+        <Skeleton width="92%" />
+        <Skeleton width="68%" />
+      </div>
+      {[0, 1].map((key) => (
+        <div className="finding-card skeleton-card" key={key}>
+          <Skeleton width="120px" height={10} />
+          <Skeleton width="55%" height={14} />
+          <Skeleton width="85%" />
+        </div>
+      ))}
+      <span className="visually-hidden">{label}</span>
+    </section>
+  );
+}
+
 export function FindingCard({ finding, index = 1 }: { finding: Finding; index?: number }) {
   return (
     <article className="finding-card">

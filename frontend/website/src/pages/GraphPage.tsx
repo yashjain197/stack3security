@@ -13,7 +13,7 @@ import {
 } from "../lib/graph-model";
 import type { GraphData, GraphNode, GraphNodeType } from "../types";
 import { GraphNodeNotFound, GraphResult, type PeerRef } from "../components/graph";
-import { Spinner } from "../components/ui";
+import { ResultSkeleton } from "../components/ui";
 
 type NodeDraft = {
   key: number;
@@ -279,7 +279,7 @@ export function GraphPage() {
           </div>
         ) : null}
         {graph.status === "loading" ? (
-          <div className="account-loading" role="status"><Spinner /> Loading graph…</div>
+          <ResultSkeleton label="Loading graph…" />
         ) : null}
         {graph.status === "ready" ? (
           <GraphResult data={graph.data} onOpenPeer={openPeer} onReport={(node) => prefillReport(node)} />

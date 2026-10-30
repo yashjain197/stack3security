@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { PageHeading, ScanError, Spinner } from "../components/ui";
+import { PageHeading, ScanError, Spinner, ResultSkeleton } from "../components/ui";
 import { VerdictPanel } from "../components/results";
 import { chainName, chains, explorerAddressUrl } from "../lib/chains";
 import { useApi, useSession } from "../lib/session";
@@ -114,6 +114,7 @@ export function ContractsPage() {
         </form>
       </section>
       <section id="contract-result" className="result-region" aria-live="polite">
+        {busy ? <ResultSkeleton label="Scanning contract…" /> : null}
         {record ? (
           <VerdictPanel
             verdict={record.verdict}

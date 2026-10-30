@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { PageHeading, ScanError, Spinner } from "../components/ui";
+import { PageHeading, ScanError, Spinner, ResultSkeleton } from "../components/ui";
 import { VerdictPanel } from "../components/results";
 import { useApi, useSession } from "../lib/session";
 import { normalizeRepoUrl, saveScan, scanRepository } from "../lib/scans";
@@ -121,6 +121,7 @@ export function RepositoriesPage() {
         </div>
       </section>
       <section id="repo-result" className="result-region" aria-live="polite">
+        {busy ? <ResultSkeleton label="Scanning repository…" /> : null}
         {record ? (
           <VerdictPanel
             verdict={record.verdict}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type DependencyList, type ReactNode } from
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError, safeReturnPath } from "../lib/api";
 import { errorMessage, useApi, useSessionContext } from "../lib/session";
-import { Spinner } from "./ui";
+import { Skeleton } from "./ui";
 
 export function AccountHeading({ title, text }: { title: string; text: string }) {
   return (
@@ -28,7 +28,13 @@ export function Panel({ title, children }: { title: string; children: ReactNode 
 export function AccountLoading({ label = "Loading account data…" }: { label?: string }) {
   return (
     <div className="account-loading" role="status">
-      <Spinner /> {label}
+      <div className="skeleton-stack">
+        <Skeleton width="180px" height={18} />
+        <Skeleton width="100%" />
+        <Skeleton width="86%" />
+        <Skeleton width="62%" />
+      </div>
+      <span className="visually-hidden">{label}</span>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { PageHeading, ScanError, Spinner } from "../components/ui";
+import { PageHeading, ScanError, Spinner, ResultSkeleton } from "../components/ui";
 import { VerdictPanel } from "../components/results";
 import { useApi, useSession } from "../lib/session";
 import { checkWebsite, normalizeDomain, saveScan } from "../lib/scans";
@@ -129,6 +129,7 @@ export function ScannerPage() {
         </section>
       </div>
       <section id="scanner-result" className="result-region" aria-live="polite">
+        {busy ? <ResultSkeleton label="Scanning website…" /> : null}
         {record ? (
           <VerdictPanel
             verdict={record.verdict}

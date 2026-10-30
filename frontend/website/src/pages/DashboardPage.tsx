@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon, type IconName } from "../components/Icon";
-import { PageHeading } from "../components/ui";
+import { PageHeading, Skeleton } from "../components/ui";
 import { ReportTable } from "../components/results";
 import { getScanStats, useScanHistory } from "../lib/scans";
 import { useApi, useSession } from "../lib/session";
 import type { ScanStats } from "../types";
 
 /** Live repo-scan counters from the scan service. Hidden when the service cannot be reached. */
-function useScanStats(): ScanStats | null {
+/** undefined while loading, null when the scan service cannot be reached. */
+function useScanStats(): ScanStats | null | undefined {
   const api = useApi();
-  const [stats, setStats] = useState<ScanStats | null>(null);
+  const [stats, setStats] = useState<ScanStats | null | undefined>(undefined);
   useEffect(() => {
     const controller = new AbortController();
     getScanStats(api, controller.signal)
@@ -77,6 +78,9 @@ export function DashboardPage() {
           </article>
         ))}
       </section>
+      {stats === undefined ? (
+        <p className="service-stats" aria-hidden="true"><Skeleton width="min(420px, 80%)" height={14} /></p>
+      ) : null}
       {stats ? (
         <p className="service-stats">
           <span>Stack3 scan service</span>

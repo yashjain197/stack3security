@@ -101,7 +101,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="topbar-avatar">{initial}</span>
           </div>
         </header>
-        <main className="dashboard-content">{children}</main>
+        {/* Keyed by route so each navigation replays the progress shimmer and the page fade-in. */}
+        <div className="route-progress" key={`progress-${activePath}`} aria-hidden="true" />
+        <main className="dashboard-content">
+          <div className="page-enter" key={activePath}>{children}</div>
+        </main>
         <footer className="app-footer">
           <span>Stack3 Security · Live scans from the Stack3 API</span>
           <span>Risk indicators, not a guarantee of safety.</span>

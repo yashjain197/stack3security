@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { Icon } from "../components/Icon";
-import { PageHeading, ScanError, Spinner } from "../components/ui";
+import { PageHeading, ScanError, Spinner, ResultSkeleton } from "../components/ui";
 import { VerdictPanel } from "../components/results";
 import { chainName, chains, nativeSymbol } from "../lib/chains";
 import { useApi, useSession } from "../lib/session";
@@ -215,6 +215,7 @@ export function TransactionsPage() {
         </div>
       </section>
       <section id="transaction-result" className="result-region" aria-live="polite">
+        {busy ? <ResultSkeleton label="Analyzing request…" /> : null}
         {result ? (
           <VerdictPanel
             verdict={result.record.verdict}
