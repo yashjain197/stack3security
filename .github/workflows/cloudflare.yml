@@ -1,0 +1,127 @@
+# Deploys the three Cloudflare Workers (each with a container image) on push to main.
+# Only the service whose files changed is deployed. Other branches never deploy.
+#
+# Needs repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   — Account API token with Edit Cloudflare Workers
+#                            (and permission to push container images)
+#   CLOUDFLARE_ACCOUNT_ID  — the Cloudflare account id
+#
+# Manual run: Actions → cloudflare → Run workflow, pick one service or all.
+name: cloudflare
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/**'
+      - 'chrome-extension-backend/**'
+      - 'vs-extension/**'
+      - 'frontend/website/**'
+      - '.github/workflows/cloudflare.yml'
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Which Worker to deploy
+        type: choice
+        options: [chrome-api, vscode-api, webpage, all]
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: cloudflare-${{ matrix.service }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: chrome-api
+            dir: cloudflare/chrome-api
+            watch: 'cloudflare/chrome-api/ chrome-extension-backend/'
+          - service: vscode-api
+            dir: cloudflare/vscode-api
+            watch: 'cloudflare/vscode-api/ vs-extension/'
+          - service: webpage
+            dir: cloudflare/webpage
+            watch: 'cloudflare/webpage/ frontend/website/'
+    steps:
+      # Actions are pinned to a commit, not a tag: a moved tag cannot change what runs here.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Decide whether this service changed
+        id: gate
+        env:
+          SERVICE: ${{ matrix.service }}
+          WATCH: ${{ matrix.watch }}
+          EVENT: ${{ github.event_name }}
+          PICK: ${{ github.event.inputs.service }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$PICK" = "all" ] || [ "$PICK" = "$SERVICE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+            exit 0
+          fi
+          if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! changed="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          run=false
+          for prefix in $WATCH; do
+            if printf '%s\n' "$changed" | grep -q "^${prefix}"; then run=true; fi
+          done
+          if printf '%s\n' "$changed" | grep -q '^\.github/workflows/cloudflare.yml$'; then run=true; fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+      - name: Skip (no changes for this Worker)
+        if: steps.gate.outputs.run != 'true'
+        run: echo "No path changes for ${{ matrix.service }}; not deploying."
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            ${{ matrix.dir }}/package-lock.json
+            frontend/website/package-lock.json
+
+      - name: Build website into the container context
+        if: steps.gate.outputs.run == 'true' && matrix.service == 'webpage'
+        working-directory: frontend/website
+        run: |
+          npm ci
+          npm run build
+          rm -rf ../../cloudflare/webpage/context/dist
+          cp -R dist ../../cloudflare/webpage/context/dist
+          cp server.js ../../cloudflare/webpage/context/server.js
+
+      - name: Install Wrangler
+        if: steps.gate.outputs.run == 'true'
+        working-directory: ${{ matrix.dir }}
+        run: npm ci --ignore-scripts
+
+      - name: Deploy
+        if: steps.gate.outputs.run == 'true'
+        working-directory: ${{ matrix.dir }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DOCKER_BUILDKIT: '1'
+        run: |
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "Secret CLOUDFLARE_API_TOKEN is not set"; exit 1; }
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || { echo "Secret CLOUDFLARE_ACCOUNT_ID is not set"; exit 1; }
+          npx wrangler deploy --keep-vars
