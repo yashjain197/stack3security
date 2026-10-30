@@ -33,6 +33,13 @@ The service needs outbound HTTPS to github.com (to clone), to `STACK3_API_URL` (
 
 `GET /healthz` returns `{"status":"ok"}`. No key.
 
+`GET /v1/internal/stats` with header `X-Service-Key` returns the counters for the website's live numbers:
+`{"reposScanned", "threatsFound", "byLevel": {"critical", "high", "caution", "unknown", "no_known_issues"}, "since"}`.
+`threatsFound` is the number of scans that ended critical or high. Each scan that finishes counts once; an answer served from the
+cache, a failed clone and a bad URL do not. Only counts are kept (no repository names). They live in memory, so they start again
+at zero when the service restarts (`since` says when). It is behind the key like the scan route: the Stack3 API serves it on to
+the website.
+
 `POST /v1/internal/scan-repo` with header `X-Service-Key` and body `{"repoUrl": "https://github.com/owner/name", "ref": "optional-commit"}`
 returns the verdict JSON: `level`, `target`, `findings`, `indicators`, `notChecked`, `actions`, `explanation` (always `null`).
 `level` is the worst finding, one of `critical`, `high`, `caution`, `unknown`, `no_known_issues`, never "safe".

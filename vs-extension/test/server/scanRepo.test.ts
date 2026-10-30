@@ -135,6 +135,17 @@ describe('the scan', () => {
     await none.scanner.scan({ repoUrl: URL_ });
     expect(none.deps.scanPackages).not.toHaveBeenCalled();
   });
+  test('onScanned runs once per finished scan: not for a cached answer, a failed clone or a bad url, and a throw does not fail the scan', async () => {
+    const seen: string[] = [];
+    const t = setup({ onScanned: (v) => void seen.push(v.level) });
+    await t.scanner.scan({ repoUrl: URL_ });
+    await t.scanner.scan({ repoUrl: URL_ }); // cached
+    await t.scanner.scan({ repoUrl: 'https://gitlab.com/o/r' });
+    await setup({ onScanned: (v) => void seen.push(v.level), cloneResult: { ok: false, reason: 'nope' } }).scanner.scan({ repoUrl: URL_ });
+    expect(seen).toEqual(['no_known_issues']);
+    const boom = setup({ onScanned: () => { throw new Error('x'); } });
+    expect((await boom.scanner.scan({ repoUrl: URL_ })).ok).toBe(true);
+  });
   test('a requested commit that was not the one scanned is said so; a matching one is not', async () => {
     const mismatch = await setup().scanner.scan({ repoUrl: URL_, ref: 'abcdef1' });
     expect(mismatch.ok && mismatch.verdict.notChecked.join()).toMatch(/Commit abcdef1 was not scanned; the default branch tip ccccccc was/);

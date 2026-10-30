@@ -15,6 +15,7 @@ import { createApp } from '../../src/server/app';
 import { createLimiter } from '../../src/server/limiter';
 import { createReporter } from '../../src/server/reporter';
 import { createRepoScanner } from '../../src/server/scanRepo';
+import { createStats } from '../../src/server/stats';
 import { hardenedLocalClone, hasGit, makeBareRemote } from '../helpers/git';
 
 // The whole service, for real: HTTP in, a real hardened git clone, the real bundled scan worker, a stand-in for the
@@ -74,7 +75,7 @@ describe.skipIf(!hasGit)('scan-repo service, end to end', () => {
       },
       { cacheTtlMs: 60_000, maxCache: 10 },
     );
-    service = http.createServer(createApp({ serviceKey: KEY, scanner, scanTimeoutMs: 60_000, log: () => undefined }));
+    service = http.createServer(createApp({ serviceKey: KEY, scanner, scanTimeoutMs: 60_000, stats: createStats(), log: () => undefined }));
     await new Promise<void>((r) => service.listen(0, '127.0.0.1', r));
     base = `http://127.0.0.1:${(service.address() as AddressInfo).port}`;
   });

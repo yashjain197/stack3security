@@ -21,6 +21,8 @@ export interface ScanRepoDeps {
   scanPackages(purls: string[]): Promise<PackageScan>;
   /** Best effort: a failure here never fails a scan. */
   report(r: GraphReport): Promise<unknown>;
+  /** Called once for each scan that finishes (not for a cached answer or a failure). A throw here never fails a scan. */
+  onScanned?(verdict: WireVerdict): void;
   limiter: Limiter;
   now(): number;
 }
@@ -109,7 +111,13 @@ export function createRepoScanner(deps: ScanRepoDeps, opts: ScannerOptions): { s
           const report = buildGraphReport({ owner, repo, findings: all, packageFor });
           if (report) void Promise.resolve(deps.report(report)).catch(() => undefined);
 
-          return { ok: true, verdict: toWireVerdict(verdict, { owner, repo }) };
+          const wire = toWireVerdict(verdict, { owner, repo });
+          try {
+            deps.onScanned?.(wire);
+          } catch {
+            // counting is best effort
+          }
+          return { ok: true, verdict: wire };
         } finally {
           await deps.removeDir(dir).catch(() => undefined);
         }

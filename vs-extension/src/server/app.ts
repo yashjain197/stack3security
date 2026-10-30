@@ -2,11 +2,13 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import type { ScanOutcome, ScanFailureCode } from './scanRepo';
+import type { StatsSnapshot } from './stats';
 
 export interface AppDeps {
   serviceKey: string;
   scanner: { scan(input: { repoUrl: string; ref?: string }): Promise<ScanOutcome> };
   scanTimeoutMs: number;
+  stats: { snapshot(): StatsSnapshot };
   log(event: Record<string, unknown>): void;
 }
 
@@ -54,7 +56,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> {
 }
 
 /**
- * The HTTP surface: GET /healthz, and POST /v1/internal/scan-repo behind X-Service-Key. Errors use the API's shape,
+ * The HTTP surface: GET /healthz, and behind X-Service-Key POST /v1/internal/scan-repo and GET /v1/internal/stats. Errors use the API's shape,
  * {"error": {"code", "message"}}. Authentication comes before the body is read; the body is capped; nothing internal
  * (paths, stacks, the key) is ever put in a response or a log line.
  */
@@ -71,13 +73,16 @@ export function createApp(deps: AppDeps): RequestListener {
       if (req.method !== 'GET') return replyError(405, 'method_not_allowed', 'Use GET.', { allow: 'GET' });
       return reply(200, { status: 'ok' });
     }
-    if (path !== '/v1/internal/scan-repo') return replyError(404, 'not_found', 'No such route.');
-    if (req.method !== 'POST') return replyError(405, 'method_not_allowed', 'Use POST.', { allow: 'POST' });
+    const isStats = path === '/v1/internal/stats';
+    if (path !== '/v1/internal/scan-repo' && !isStats) return replyError(404, 'not_found', 'No such route.');
+    const method = isStats ? 'GET' : 'POST';
+    if (req.method !== method) return replyError(405, 'method_not_allowed', `Use ${method}.`, { allow: method });
 
     const given = req.headers['x-service-key'];
     if (!keyMatches(typeof given === 'string' ? given : undefined, deps.serviceKey)) {
       return replyError(401, 'invalid_service_key', 'The X-Service-Key header is missing or wrong.', { connection: 'close' });
     }
+    if (isStats) return reply(200, deps.stats.snapshot());
     if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return replyError(415, 'unsupported_media_type', 'Send application/json.');
 
     const raw = await readBody(req);

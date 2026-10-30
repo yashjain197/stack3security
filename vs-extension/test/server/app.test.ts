@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../../src/server/app';
+import { createStats } from '../../src/server/stats';
 import type { ScanOutcome } from '../../src/server/scanRepo';
 import type { WireVerdict } from '../../src/server/wire';
 
@@ -15,10 +16,10 @@ const verdict = (over: Partial<WireVerdict> = {}): WireVerdict => ({
 let server: http.Server | undefined;
 afterEach(() => new Promise<void>((r) => (server ? server.close(() => r()) : r())).then(() => (server = undefined)));
 
-async function start(scan: (i: { repoUrl: string; ref?: string }) => Promise<ScanOutcome> = async () => ({ ok: true, verdict: verdict() }), over: { scanTimeoutMs?: number } = {}) {
+async function start(scan: (i: { repoUrl: string; ref?: string }) => Promise<ScanOutcome> = async () => ({ ok: true, verdict: verdict() }), over: { scanTimeoutMs?: number; stats?: ReturnType<typeof createStats> } = {}) {
   const logs: object[] = [];
   const scanner = { scan: vi.fn(scan) };
-  server = http.createServer(createApp({ serviceKey: KEY, scanner, scanTimeoutMs: over.scanTimeoutMs ?? 5000, log: (e) => void logs.push(e) }));
+  server = http.createServer(createApp({ serviceKey: KEY, scanner, scanTimeoutMs: over.scanTimeoutMs ?? 5000, stats: over.stats ?? createStats(), log: (e) => void logs.push(e) }));
   await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const post = (body: unknown, headers: Record<string, string> = { 'x-service-key': KEY }, path = '/v1/internal/scan-repo') =>
@@ -33,6 +34,34 @@ describe('health', () => {
     const res = await fetch(`${base}/healthz`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: 'ok' });
+  });
+});
+
+describe('GET /v1/internal/stats', () => {
+  test('answers the counters to a caller with the key, and says they are not cacheable', async () => {
+    const stats = createStats(() => Date.UTC(2026, 9, 30));
+    stats.record('critical');
+    stats.record('no_known_issues');
+    const { base } = await start(undefined, { stats });
+    const res = await fetch(`${base}/v1/internal/stats`, { headers: { 'x-service-key': KEY } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.json()).toEqual({ reposScanned: 2, threatsFound: 1, byLevel: { critical: 1, high: 0, caution: 0, unknown: 0, no_known_issues: 1 }, since: '2026-10-30T00:00:00.000Z' });
+  });
+  test.each([[{}], [{ 'x-service-key': 'wrong' }], [{ 'x-service-key': '' }]])('%j → 401, and no numbers are given out', async (headers) => {
+    const { base } = await start();
+    const res = await fetch(`${base}/v1/internal/stats`, { headers });
+    expect(res.status).toBe(401);
+    expect(await res.text()).not.toContain('reposScanned');
+  });
+  test('only GET is allowed, and scan-repo still only POST', async () => {
+    const { base } = await start();
+    const post = await fetch(`${base}/v1/internal/stats`, { method: 'POST', headers: { 'x-service-key': KEY } });
+    expect(post.status).toBe(405);
+    expect(post.headers.get('allow')).toBe('GET');
+    const get = await fetch(`${base}/v1/internal/scan-repo`, { headers: { 'x-service-key': KEY } });
+    expect(get.status).toBe(405);
+    expect(get.headers.get('allow')).toBe('POST');
   });
 });
 
@@ -64,7 +93,7 @@ describe('authentication (X-Service-Key)', () => {
 describe('authentication does not depend on the config being sane', () => {
   test('even an app built with an EMPTY key refuses a request that sends no key (or an empty one)', async () => {
     const logs: object[] = [];
-    server = http.createServer(createApp({ serviceKey: '', scanner: { scan: async () => ({ ok: true, verdict: verdict() }) }, scanTimeoutMs: 1000, log: (e) => void logs.push(e) }));
+    server = http.createServer(createApp({ serviceKey: '', scanner: { scan: async () => ({ ok: true, verdict: verdict() }) }, scanTimeoutMs: 1000, stats: createStats(), log: (e) => void logs.push(e) }));
     await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
     const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/internal/scan-repo`;
     const body = JSON.stringify({ repoUrl: 'https://github.com/o/r' });

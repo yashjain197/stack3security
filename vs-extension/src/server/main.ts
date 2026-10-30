@@ -11,6 +11,7 @@ import { createLimiter } from './limiter';
 import { createReporter } from './reporter';
 import { createRepoScanner, type PackageScan } from './scanRepo';
 import { createSocketScanner } from './socket';
+import { createStats } from './stats';
 
 const log = (event: Record<string, unknown>): void => console.log(JSON.stringify({ ts: new Date().toISOString(), ...event }));
 
@@ -33,6 +34,7 @@ function main(): void {
     return res;
   };
 
+  const stats = createStats();
   const reporter = createReporter({ apiUrl: config.apiUrl, serviceKey: config.serviceKey });
   const scanner = createRepoScanner(
     {
@@ -45,13 +47,14 @@ function main(): void {
         const res = await reporter.report(r);
         log({ event: 'report', ok: res.ok, nodes: r.nodes.length, edges: r.edges.length, ...(res.ok ? { synced: res.value.synced } : { reason: res.reason }) });
       },
+      onScanned: (v) => stats.record(v.level),
       limiter: createLimiter(config.maxConcurrent, config.maxQueue),
       now: Date.now,
     },
     { cacheTtlMs: config.cacheTtlMs, maxCache: 200 },
   );
 
-  const server = http.createServer(createApp({ serviceKey: config.serviceKey, scanner, scanTimeoutMs: config.scanTimeoutMs, log }));
+  const server = http.createServer(createApp({ serviceKey: config.serviceKey, scanner, scanTimeoutMs: config.scanTimeoutMs, stats, log }));
   server.headersTimeout = 10_000;
   server.requestTimeout = 20_000;
   server.keepAliveTimeout = 5_000;
