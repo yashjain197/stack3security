@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.db.base import utcnow
 from app.modules.protection.abi import DecodedCall, parse_calldata, parse_quantity
+from app.modules.protection.age import age_phrase
 from app.modules.protection.chain import assess_contract, contract_findings
 from app.modules.protection.domain import check_domain
-from app.modules.protection.lookup import graph_finding, known_nodes
+from app.modules.protection.lookup import drain_sources, graph_finding, known_nodes
 from app.modules.protection.schemas import CallIn, TxReviewIn
+from app.modules.protection.tokens import format_amount, token_of
 from app.modules.protection.verdicts import finding, finish
 from app.schemas.verdict import Finding, Indicators, Layer, Level, Source, Target, TargetType, Verdict
 
@@ -105,15 +107,17 @@ async def _review_call(
     _check_address(call.to, "to")
     decoded = parse_calldata(call.data)
     value = parse_quantity(call.value)
+    spent_age = None
+    approvals = {"approve", "increaseAllowance", "permit", "setApprovalForAll"}
+    if decoded is not None and decoded.spender and decoded.name in approvals:
+        spent_age = await _spender_age(db, chain_id, decoded.spender, checked_at, found, skipped)
     if decoded is not None:
-        found.extend(_decoded_findings(decoded, checked_at))
+        found.extend(_decoded_findings(decoded, checked_at, token_of(call.to), spent_age))
         for address in (decoded.spender, decoded.recipient):
             if address:
                 addresses.append(f"{chain_id}:{address}")
                 noun = "spender" if address == decoded.spender else "recipient"
                 await _wallet(db, chain_id, address, noun, checked_at, found)
-                if decoded.name in {"approve", "increaseAllowance", "permit", "setApprovalForAll"}:
-                    await _contract_side(db, chain_id, address, checked_at, found, skipped)
     if call.to:
         addresses.append(f"{chain_id}:{call.to.lower()}")
         kind = "contract" if decoded is not None else "recipient"
@@ -123,26 +127,53 @@ async def _review_call(
             await _contract_side(db, chain_id, call.to, checked_at, found, skipped)
 
 
-def _decoded_findings(decoded: DecodedCall, checked_at) -> list[Finding]:
-    """Findings that come from the call itself, before we know who the spender is."""
+def _decoded_findings(
+    decoded: DecodedCall, checked_at, token: tuple[str, int] | None, age: str | None
+) -> list[Finding]:
+    """Findings that come from the call itself. The token name and the spender's age are included when we know them."""
+    age_note = f" The spender contract was deployed {age}." if age else ""
     if decoded.approval_for_all is True:
         return [
             finding(
                 layer=Layer.INTENT,
                 severity=Level.CRITICAL,
                 title="This grants permission to move every NFT in the collection",
-                evidence="setApprovalForAll(true) lets the spender transfer all of these NFTs, not just one.",
+                evidence="setApprovalForAll(true) lets the spender transfer every NFT in the collection." + age_note,
                 source=Source.RULES,
                 checked_at=checked_at,
             )
         ]
     if decoded.unlimited and decoded.name in {"approve", "increaseAllowance", "permit"}:
+        if token is not None:
+            symbol = token[0]
+            title = f"This approval can take the entire {symbol} balance"
+            evidence = f"The spender can move all of the {symbol} in this wallet, now or later.{age_note}"
+        else:
+            title = "This is an unlimited token approval"
+            evidence = f"{decoded.name} allows the spender to take the entire token balance, now or later.{age_note}"
         return [
             finding(
                 layer=Layer.INTENT,
                 severity=Level.HIGH,
-                title="This is an unlimited token approval",
-                evidence=f"{decoded.name} allows the spender to take the entire token balance, now or later.",
+                title=title,
+                evidence=evidence,
+                source=Source.RULES,
+                checked_at=checked_at,
+            )
+        ]
+    if (
+        decoded.name in {"approve", "increaseAllowance", "permit"}
+        and token is not None
+        and decoded.amount is not None
+    ):
+        symbol, decimals = token
+        shown = format_amount(decoded.amount, decimals)
+        return [
+            finding(
+                layer=Layer.INTENT,
+                severity=Level.CAUTION,
+                title=f"This approval lets the spender move {shown} {symbol}",
+                evidence=f"{decoded.name} sets an allowance of {shown} {symbol}.{age_note}",
                 source=Source.RULES,
                 checked_at=checked_at,
             )
@@ -231,6 +262,41 @@ async def _wallet(db, chain_id: int, address: str, noun: str, checked_at, found:
         hit = graph_finding(row, noun, checked_at)
         if hit is not None:
             found.append(hit)
+    peers = await drain_sources(db, chain_id, address)
+    if peers:
+        found.append(_drain_finding(peers, chain_id, address, checked_at))
+
+
+async def _spender_age(
+    db, chain_id: int, address: str, checked_at, found: list[Finding], skipped: list[str]
+) -> str | None:
+    """How recently the spender contract was deployed, after its other contract findings are recorded."""
+    if not _ADDRESS.fullmatch(address):
+        return None
+    facts = await assess_contract(chain_id, address.lower())
+    skipped.extend(facts.not_checked)
+    found.extend(contract_findings(facts, checked_at))
+    return age_phrase(facts.created_at, checked_at, within_days=14)
+
+
+def _drain_finding(peers: list, chain_id: int, address: str, checked_at) -> Finding:
+    """One finding that names the package or site and the wallet this transaction pays."""
+    bits = []
+    for peer in peers:
+        if peer.vertex_type == "SoftwarePackage":
+            bits.append(f"the package {peer.vertex_id}")
+        elif peer.vertex_type == "Domain":
+            bits.append(f"the site {peer.vertex_id}")
+    who = " and ".join(bits) or "a reported threat"
+    severe = any(peer.risk == "critical" for peer in peers)
+    return finding(
+        layer=Layer.GRAPH,
+        severity=Level.CRITICAL if severe else Level.HIGH,
+        title="This payment goes to a wallet a reported threat already drains to",
+        evidence=f"{who} drains to {chain_id}:{address.lower()}, and this transaction pays that same wallet.",
+        source=Source.GRAPH,
+        checked_at=checked_at,
+    )
 
 
 async def _contract_side(db, chain_id: int, address: str, checked_at, found: list[Finding], skipped: list[str]) -> None:

@@ -8,13 +8,15 @@ from datetime import datetime
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.modules.graph.catalog import normalize_node
-from app.modules.graph.models import GraphNode
+from app.modules.graph.models import GraphEdge, GraphNode
 from app.modules.protection.verdicts import finding
 from app.schemas.verdict import Finding, Layer, Level, Source
 
 _GRAPH_LEVEL = {"caution": Level.CAUTION, "high": Level.HIGH, "critical": Level.CRITICAL}
+_DRAIN_EDGES = ("PACKAGE_DRAINS_TO", "DOMAIN_DRAINS_TO")
 
 
 async def known_nodes(db: AsyncSession, keys: list[tuple[str, str]]) -> dict[tuple[str, str], GraphNode]:
@@ -45,6 +47,30 @@ async def known_nodes(db: AsyncSession, keys: list[tuple[str, str]]) -> dict[tup
         for node in wanted
         if (node.vertex_type, node.vertex_id) in found
     }
+
+
+async def drain_sources(db: AsyncSession, chain_id: int, address: str) -> list[GraphNode]:
+    """Packages and sites that the graph already says drain to this wallet."""
+    try:
+        wallet_id = normalize_node("wallet", f"{chain_id}:{address}").vertex_id
+    except ValueError:
+        return []
+    wallet = aliased(GraphNode)
+    peer = aliased(GraphNode)
+    rows = (
+        await db.scalars(
+            select(peer)
+            .join(GraphEdge, GraphEdge.from_node_id == peer.id)
+            .join(wallet, GraphEdge.to_node_id == wallet.id)
+            .where(
+                wallet.vertex_type == "Wallet",
+                wallet.vertex_id == wallet_id,
+                GraphEdge.edge_type.in_(_DRAIN_EDGES),
+            )
+            .limit(8)
+        )
+    ).all()
+    return list(rows)
 
 
 def graph_finding(node: GraphNode, noun: str, checked_at: datetime) -> Finding | None:

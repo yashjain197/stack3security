@@ -9,9 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.db.base import utcnow
 from app.modules.graph.catalog import normalize_node
+from app.modules.protection.age import is_very_recent
 from app.modules.protection.blocklist import current_blocklist
 from app.modules.protection.catalog import canonical_host, lookalike, official_brand
 from app.modules.protection.lookup import graph_finding, known_nodes
+from app.modules.protection.rdap import domain_age
 from app.modules.protection.verdicts import finding, finish
 from app.schemas.verdict import Indicators, Layer, Level, Source, Target, TargetType, Verdict
 
@@ -30,6 +32,7 @@ async def check_domain(db: AsyncSession, raw: str) -> Verdict:
     lists = await current_blocklist()
     nodes = await known_nodes(db, [("domain", host)])
     found = []
+    skipped: list[str] = []
     listed = lists.source(host)
     if listed:
         found.append(
@@ -61,23 +64,50 @@ async def check_domain(db: AsyncSession, raw: str) -> Verdict:
             found.append(hit)
 
     similar = lookalike(host, whitelisted=lists.allowed(host))
+    suspicious = bool(listed or lists.fuzzy_hit(host) or similar is not None)
+    phrase = None
+    if suspicious and official_brand(host) is None:
+        phrase, missed = await domain_age(host)
+        if missed:
+            skipped.append("rdap")
     if similar is not None and official_brand(host) is None:
+        severity = _LEVEL[similar.severity]
+        if phrase and is_very_recent(phrase):
+            severity = Level.CRITICAL
+        elif phrase and severity == Level.CAUTION:
+            severity = Level.HIGH
+        evidence = _lookalike_evidence(host, similar.brand, similar.kind)
+        if phrase:
+            evidence = f"{evidence} The domain was registered {phrase}."
         found.append(
             finding(
                 layer=Layer.SITE,
-                severity=_LEVEL[similar.severity],
+                severity=severity,
                 title=f"This name imitates {similar.brand}",
-                evidence=_lookalike_evidence(host, similar.brand, similar.kind),
+                evidence=evidence,
+                source=Source.RULES,
+                checked_at=checked_at,
+            )
+        )
+    if phrase:
+        found.append(
+            finding(
+                layer=Layer.SITE,
+                severity=Level.CRITICAL if is_very_recent(phrase) else Level.HIGH,
+                title=f"This domain was registered {phrase}",
+                evidence=f"{host} is only that old, and it already matches a wallet brand or a blocklist.",
                 source=Source.RULES,
                 checked_at=checked_at,
             )
         )
 
+    if not lists.remote_ok:
+        skipped.append("blocklist")
     indicators = Indicators(domains=[host] if found else [])
     return finish(
         Target(type=TargetType.SITE, id=host),
         found,
-        not_checked=[] if lists.remote_ok else ["blocklist"],
+        not_checked=skipped,
         indicators=indicators,
         incomplete=not lists.remote_ok and not found,
     )
