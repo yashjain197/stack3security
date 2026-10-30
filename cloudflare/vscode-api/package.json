@@ -1,0 +1,12 @@
+{
+  "name": "stack3-vscode-api-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/containers": "0.3.7",
+    "wrangler": "4.156.0"
+  }
+}

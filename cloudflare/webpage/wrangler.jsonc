@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "stack3security",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-30",
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "WebContainer",
+      "image": "../../frontend/webpage/Dockerfile",
+      "image_build_context": "../../frontend/webpage",
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WEB",
+        "class_name": "WebContainer"
+      }
+    ]
+  },
+  "exports": {
+    "WebContainer": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}
