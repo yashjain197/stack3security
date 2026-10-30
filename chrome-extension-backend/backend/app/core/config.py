@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     socket_api_key: SecretStr | None = None
     # Public phishing lists. Tests turn this off so they never call GitHub.
     rules_remote: bool = True
+    # Public domain registration lookup. Tests turn this off and pin dates instead.
+    rdap_remote: bool = True
 
     internal_service_key: SecretStr = SecretStr("dev-only-internal-key-change-me-0123456789")
 

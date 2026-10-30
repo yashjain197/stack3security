@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.db.base import utcnow
+from app.modules.protection.age import age_phrase
 from app.modules.protection.http import get_http
 from app.modules.protection.lookup import graph_finding, known_nodes
 from app.modules.protection.verdicts import finding, finish
@@ -105,7 +106,6 @@ def contract_findings(facts: ContractFacts, checked_at: datetime) -> list[Findin
     found: list[Finding] = []
     age_hours = _age_hours(facts.created_at, checked_at)
     new = age_hours is not None and age_hours < 24
-    week = age_hours is not None and age_hours < 24 * 7
     # Without bytecode, an empty Etherscan page is just as likely to be a wallet as an unverified contract.
     unverified = facts.verified is False and facts.is_contract is True
     single_owner = facts.owner_is_eoa is True and facts.owner is not None
@@ -166,13 +166,14 @@ def contract_findings(facts: ContractFacts, checked_at: datetime) -> list[Findin
             )
         )
 
-    if week and not new and not any(item.severity == Level.HIGH for item in found):
-        days = max(int((age_hours or 0) / 24), 1)
+    phrase = age_phrase(facts.created_at, checked_at, within_days=14)
+    if phrase and not any("deployed" in item.title.lower() for item in found):
+        young = phrase == "yesterday" or phrase == "less than an hour ago" or phrase.endswith("hours ago")
         found.append(
             _contract(
-                Level.CAUTION,
-                f"This contract was deployed {days} days ago",
-                f"{facts.address} is still new.",
+                Level.HIGH if young and unverified else Level.CAUTION,
+                f"This contract was deployed {phrase}",
+                f"{facts.address} has only been on chain since then.",
                 checked_at,
             )
         )
