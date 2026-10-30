@@ -1,1 +1,1 @@
-﻿{ "apiBaseUrl": "http://localhost:8000" }
+﻿{ "apiBaseUrl": "http://localhost:8000", "scanApiBaseUrl": "http://localhost:8080" }
