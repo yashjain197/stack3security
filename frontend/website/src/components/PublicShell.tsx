@@ -2,11 +2,12 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "./Icon";
 import { useSession } from "../lib/session";
+import logo from "../assets/logo-dark.svg";
 
 export function Brand() {
   return (
     <Link className="brand" to="/">
-      <span className="brand-mark"><Icon name="shield" /></span>
+      <img className="brand-mark" src={logo} alt="" width={28} height={28} />
       <span>stack3<span className="brand-light"> security</span></span>
     </Link>
   );

@@ -39,8 +39,7 @@ code { font-family: var(--mono); }
 
 /* ---------- Brand, buttons, links ---------- */
 .brand { display: inline-flex; gap: 9px; align-items: center; color: var(--ink); font-size: 17px; font-weight: 700; letter-spacing: -.02em; white-space: nowrap; }
-.brand-mark { width: 28px; height: 28px; display: grid; place-items: center; color: #fff; background: var(--ink); border-radius: 7px; }
-.brand-mark svg { width: 17px; height: 17px; }
+.brand-mark { width: 28px; height: 28px; display: block; flex: 0 0 auto; }
 .brand-light { color: var(--muted); font-weight: 400; }
 
 .button { min-height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--radius); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; }
@@ -103,8 +102,7 @@ button:disabled { cursor: progress; }
 .visual-lock { margin-left: auto; color: var(--faint); }
 .visual-lock svg { width: 13px; height: 13px; }
 .visual-sidebar { display: flex; flex-direction: column; align-items: center; gap: 20px; padding-top: 22px; background: var(--surface); border-right: 1px solid var(--line); }
-.mini-mark { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: var(--ink); color: #fff; }
-.mini-mark svg { width: 13px; height: 13px; }
+.mini-mark { width: 22px; height: 22px; display: block; }
 .visual-sidebar i { width: 14px; height: 3px; border-radius: 2px; background: var(--line-strong); }
 .visual-content { padding: 22px 22px 18px; }
 .visual-caption, .mini-label { display: block; color: var(--faint); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
