@@ -18,13 +18,14 @@ const MAX_REQUESTS = 4;
 const MAX_BODY = 32 * 1024 * 1024;
 const TIMEOUT_MS = 30_000;
 
-// Only what a person should stop for. Socket's "middle" alerts (network access, eval, shell use...) fire on ordinary
-// packages and would put every repository at "caution"; licence, quality and maintenance alerts are not security findings.
+// Only what a person should stop for: a hostile package (malware, typosquat, install script, exfiltration). Socket's
+// "middle" alerts (network access, eval, shell use...) fire on ordinary packages, and its vulnerability alerts are known
+// CVEs in old versions: a popular repo with an old dev dependency is not an attack, and would read as "critical".
+// Licence, quality and maintenance alerts are not security findings.
 const SEVERITY: Record<string, Severity> = { critical: 'critical', high: 'high' };
-const CATEGORIES = new Set(['supplyChainRisk', 'vulnerability']);
+const CATEGORIES = new Set(['supplyChainRisk']);
 // Alerts Socket synthesises when it has no verdict yet; the package was not checked.
 const UNRESOLVED = new Set(['pendingScan', 'notFound']);
-const CVE = /^CVE-\d{4}-\d{4,10}$/;
 
 type Chunk = { ok: true; findings: Finding[]; unresolved: number } | { ok: false; reason: string };
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -32,7 +33,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const identifier = (v: unknown, max: number): string => text(v).replace(/[^A-Za-z0-9._-]/g, '').slice(0, max);
 
 /**
- * Package-malware and vulnerability data from Socket.dev, for the repo-scan service. Only package URLs leave the
+ * Package-malware data from Socket.dev, for the repo-scan service. Only package URLs leave the
  * service. Anything Socket could not answer is reported back as "not checked", never as clean (I-5), and what it does
  * answer can only add findings: the level is still computed locally.
  */
@@ -95,13 +96,12 @@ export function createSocketScanner(opts: SocketOptions): (purls: string[]) => P
         const dedupe = `${label}|${identifier(a.key, 200) || type}`;
         if (seen.has(dedupe)) continue;
         seen.add(dedupe);
-        const cve = isRecord(a.props) && CVE.test(text(a.props.cveId)) ? ` ${text(a.props.cveId)}` : '';
         findings.push({
           ruleId: `socket.${type}`,
           layer: 'dependency',
           severity,
           title: clip(`Socket.dev flagged ${label}: ${type}`, 300),
-          evidence: clip(`Socket.dev reported ${severity} (${category}) alert "${type}" on ${label}.${cve}`),
+          evidence: clip(`Socket.dev reported ${severity} (${category}) alert "${type}" on ${label}.`),
           source: 'socket',
           checkedAt: new Date(now()).toISOString(),
         });

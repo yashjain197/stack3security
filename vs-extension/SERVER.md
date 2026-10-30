@@ -77,8 +77,10 @@ report never fails the scan.
 
 With `SOCKET_API_KEY` set, the package URLs found in the lockfiles (`pkg:npm/name@version`, nothing else) are sent to Socket in
 batches of 500, at most 4 batches per scan (2000 packages; each request costs 100 quota units). Socket's critical and high
-alerts in the `supplyChainRisk` and `vulnerability` categories become findings with source `socket`; the level is still
-computed here. Middle and low alerts, and licence, quality and maintenance alerts, are ignored: they fire on ordinary packages.
+alerts in the `supplyChainRisk` category (malware, typosquats, install scripts, exfiltration) become findings with source
+`socket`; the level is still computed here. Middle and low alerts are ignored because they fire on ordinary packages, and so are
+known-CVE (`vulnerability`) alerts, licence, quality and maintenance alerts: an old dev dependency in a popular repo is not an
+attack, and would make it "critical".
 
 A package Socket has no verdict for (`pendingScan`, `notFound`, a `purlError`, a failed batch, or past the 2000 cap) is counted
 in a `notChecked` line ("Package scan incomplete: N of M packages were not checked by Socket."), so the level is at least
