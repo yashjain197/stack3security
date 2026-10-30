@@ -7,6 +7,7 @@ Made by Yash Jain with passion.
 """
 
 import time
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import respx
@@ -16,9 +17,11 @@ from app.core.config import get_settings
 from app.modules.protection.abi import parse_calldata
 from app.modules.protection.blocklist import set_blocklist
 from app.modules.protection.catalog import canonical_host, lookalike
+from app.modules.protection.rdap import set_registration
 from tests.conftest import bearer, login
 
 SPENDER = "0x658729879fca881d9526480b82ae00efc54b5c2d"
+USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 OWNER = "0x1111111111111111111111111111111111111111"
 TOKEN = "0x2222222222222222222222222222222222222222"
 CONTRACT = "0x3333333333333333333333333333333333333333"
@@ -302,10 +305,15 @@ async def test_script_graph_and_socket(client, captured_codes, monkeypatch):
 
     monkeypatch.setattr(get_settings(), "socket_api_key", SecretStr("socket-test"))
     with respx.mock(assert_all_called=False) as mock:
-        mock.get("https://api.socket.dev/v0/purl").mock(
+        mock.post("https://api.socket.dev/v0/purl").mock(
             return_value=httpx.Response(
                 200,
-                json={"alerts": [{"severity": "critical", "title": "Known malware"}]},
+                json=[
+                    {
+                        "inputPurl": "pkg:npm/left-pad@1.0.0",
+                        "alerts": [{"severity": "critical", "type": "malware"}],
+                    }
+                ],
             )
         )
         socket = await client.post(
@@ -316,3 +324,87 @@ async def test_script_graph_and_socket(client, captured_codes, monkeypatch):
     assert socket.status_code == 200, socket.text
     assert socket.json()["level"] == "critical"
     assert any(item["source"] == "socket" for item in socket.json()["findings"])
+
+
+async def test_young_lookalike_is_stronger_than_the_name(client, captured_codes):
+    """A MetaMask lookalike registered yesterday is critical and says when it was registered."""
+    headers = await _auth(client, captured_codes, "young@example.com")
+    set_registration("metamaskk.io", datetime.now(UTC) - timedelta(hours=30))
+    response = await client.post("/v1/check-domain", json={"domain": "metamaskk.io"}, headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["level"] == "critical"
+    text = " ".join(item["title"] + " " + item["evidence"] for item in body["findings"]).lower()
+    assert "yesterday" in text
+    assert "metamask" in text
+
+
+async def test_approval_names_usdc_and_a_new_spender(client, captured_codes, monkeypatch):
+    """An unlimited USDC approval says so, and a spender deployed yesterday is named."""
+    headers = await _auth(client, captured_codes, "usdc@example.com")
+    settings = get_settings()
+    monkeypatch.setattr(settings, "etherscan_api_key", SecretStr("test-etherscan"))
+
+    def etherscan(request: httpx.Request) -> httpx.Response:
+        action = request.url.params["action"]
+        if action == "getsourcecode":
+            result = [{"SourceCode": "contract X {}", "ContractName": "Spender", "Proxy": "0", "Implementation": ""}]
+        else:
+            result = [{"timestamp": str(int(time.time()) - 30 * 3600)}]
+        return httpx.Response(200, json={"status": "1", "message": "OK", "result": result})
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(url__startswith="https://sourcify.dev/").mock(return_value=httpx.Response(404))
+        mock.get(url__startswith="https://api.etherscan.io/").mock(side_effect=etherscan)
+        response = await client.post(
+            "/v1/review-tx",
+            json={
+                "chainId": 1,
+                "method": "eth_sendTransaction",
+                "to": USDC,
+                "data": _approve(SPENDER, 2**256 - 1),
+            },
+            headers=headers,
+        )
+    assert response.status_code == 200, response.text
+    titles = " ".join(item["title"] for item in response.json()["findings"])
+    evidence = " ".join(item["evidence"] for item in response.json()["findings"])
+    assert "entire USDC balance" in titles
+    assert "yesterday" in titles + evidence
+
+
+async def test_payment_names_the_package_that_drains_to_the_same_wallet(client, captured_codes):
+    """A transaction that pays a wallet a reported package drains to says both in one finding."""
+    headers = await _auth(client, captured_codes, "drain@example.com")
+    package = "pkg:npm/@ledgerhq/connect-kit@1.1.7"
+    reported = await client.post(
+        "/v1/report",
+        json={
+            "reason": "connect kit drains here",
+            "nodes": [
+                {"type": "package", "id": package, "risk": "critical", "category": "drainer"},
+                {"type": "wallet", "id": f"1:{SPENDER}", "risk": "critical", "category": "drainer"},
+            ],
+            "edges": [{"type": "package_drains_to", "fromId": package, "toId": f"1:{SPENDER}"}],
+        },
+        headers=headers,
+    )
+    assert reported.status_code == 201, reported.text
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(url__startswith="https://sourcify.dev/").mock(return_value=httpx.Response(404))
+        response = await client.post(
+            "/v1/review-tx",
+            json={
+                "chainId": 1,
+                "method": "eth_sendTransaction",
+                "to": USDC,
+                "data": _approve(SPENDER, 2**256 - 1),
+            },
+            headers=headers,
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["level"] == "critical"
+    linked = next(item for item in body["findings"] if "same wallet" in item["evidence"])
+    assert package in linked["evidence"]
+    assert SPENDER in linked["evidence"]

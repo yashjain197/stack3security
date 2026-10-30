@@ -6,7 +6,6 @@ The script source is never uploaded. Socket is skipped, and said so, when SOCKET
 Made by Yash Jain with passion.
 """
 
-import asyncio
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -26,6 +25,7 @@ from app.schemas.verdict import Finding, Indicators, Layer, Level, Source, Targe
 
 _SOCKET = "https://api.socket.dev/v0/purl"
 _SOCKET_LEVEL = {"critical": Level.CRITICAL, "high": Level.HIGH, "medium": Level.CAUTION, "middle": Level.CAUTION}
+_SOCKET_SKIP = {"pendingscan", "notfound"}
 _MAX_SOCKET = 15
 
 
@@ -134,41 +134,23 @@ def _purl(url: str) -> str | None:
 
 
 async def _socket_all(purls: list[str], checked_at) -> tuple[list[Finding], bool]:
-    """Check up to 15 packages at Socket. One failure does not throw away the others."""
-    sem = asyncio.Semaphore(5)
-
-    async def one(purl: str) -> list[Finding] | None:
-        async with sem:
-            return await _socket_one(purl, checked_at)
-
-    results = await asyncio.gather(*(one(purl) for purl in purls))
-    found: list[Finding] = []
-    failed = False
-    for item in results:
-        if item is None:
-            failed = True
-        else:
-            found.extend(item)
-    return found, failed
-
-
-async def _socket_one(purl: str, checked_at) -> list[Finding] | None:
-    """Findings from Socket for one package. None means Socket did not answer."""
+    """Ask Socket about every package in one call. A failure leaves the graph result standing."""
     key = get_settings().socket_api_key
     if key is None:
-        return None
+        return [], True
     try:
-        response = await get_http().get(
+        response = await get_http().post(
             _SOCKET,
-            params={"purl": purl},
+            params={"alerts": "true"},
             headers={"Authorization": f"Bearer {key.get_secret_value()}"},
+            json={"components": [{"purl": purl} for purl in purls]},
         )
         response.raise_for_status()
         body = response.json()
     except (httpx.HTTPError, ValueError):
-        return None
+        return [], True
     found = []
-    for severity, title in _alerts(body):
+    for severity, title, purl in _alerts(body):
         level = _SOCKET_LEVEL.get(severity)
         if level is None:
             continue
@@ -182,25 +164,31 @@ async def _socket_one(purl: str, checked_at) -> list[Finding] | None:
                 checked_at=checked_at,
             )
         )
-    return found
+    return found, False
 
 
-def _alerts(body: object) -> list[tuple[str, str]]:
-    """Pull (severity, title) pairs out of the shapes Socket has used for this endpoint."""
-    rows: list[object] = []
-    if isinstance(body, dict):
-        for key in ("alerts", "issues"):
-            if isinstance(body.get(key), list):
-                rows.extend(body[key])
-        for component in body.get("components") or []:
-            if isinstance(component, dict) and isinstance(component.get("alerts"), list):
-                rows.extend(component["alerts"])
+def _alerts(body: object) -> list[tuple[str, str, str]]:
+    """Pull (severity, title, purl) from a batch response or a single package object."""
+    artifacts: list[object] = body if isinstance(body, list) else [body]
     pairs = []
-    for row in rows:
-        if not isinstance(row, dict):
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
             continue
-        severity = str(row.get("severity") or "").lower()
-        title = str(row.get("title") or row.get("type") or "Socket reported an issue")
-        if severity:
-            pairs.append((severity, title[:200]))
+        purl = str(artifact.get("inputPurl") or artifact.get("purl") or "the package")
+        rows = list(artifact.get("alerts") or [])
+        for component in artifact.get("components") or []:
+            if isinstance(component, dict):
+                rows.extend(component.get("alerts") or [])
+                if not purl or purl == "the package":
+                    purl = str(component.get("purl") or purl)
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            kind = str(row.get("type") or "").lower()
+            if kind in _SOCKET_SKIP:
+                continue
+            severity = str(row.get("severity") or "").lower()
+            title = str(row.get("title") or row.get("type") or "Socket reported an issue")
+            if severity:
+                pairs.append((severity, title[:200], purl))
     return pairs
