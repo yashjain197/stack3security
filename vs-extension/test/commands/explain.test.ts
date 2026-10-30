@@ -67,12 +67,18 @@ describe('which provider, and whether to ask at all (D-5)', () => {
     await explainRecord(publicRec(), a.deps);
     expect([a.api.explain, a.claude.explain].map((x) => (x as ReturnType<typeof vi.fn>).mock.calls.length)).toEqual([1, 0]);
   });
-  test('nothing to explain (no findings) → no request, no placeholder', async () => {
+  test('nothing to explain (no findings) → no Claude request, but the package count is shown', async () => {
     const t = setup();
-    await explainRecord(makeRec('no_known_issues'), t.deps);
+    const clean = makeRec('no_known_issues', { packages: [{ purl: 'pkg:npm/lodash@4.17.21' }, { purl: 'pkg:npm/express@4.19.2' }] });
+    await explainRecord(clean, t.deps);
     await explainRecord(makeRec('unknown'), t.deps);
     expect(t.claude.explain).not.toHaveBeenCalled();
-    expect(t.posts).toEqual([]);
+    expect(t.posts[0]?.msg).toMatchObject({ state: 'ready' });
+    if (t.posts[0]?.msg.state !== 'ready') throw new Error('expected ready');
+    expect(t.posts[0].msg.explanation).toContain('2 npm packages');
+    expect(t.posts[1]?.msg).toMatchObject({ state: 'ready' });
+    if (t.posts[1]?.msg.state !== 'ready') throw new Error('expected ready');
+    expect(t.posts[1].msg.explanation).toContain('no npm packages');
   });
 });
 

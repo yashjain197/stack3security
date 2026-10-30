@@ -135,6 +135,21 @@ describe('the scan', () => {
     await none.scanner.scan({ repoUrl: URL_ });
     expect(none.deps.scanPackages).not.toHaveBeenCalled();
   });
+  test('a Socket finding is pointed at the file that named the package', async () => {
+    const malware: Finding = {
+      ...f('critical', 'socket.malware'),
+      layer: 'dependency',
+      source: 'socket',
+      title: 'Socket.dev flagged a@1.0.0: malware',
+      evidence: 'Socket.dev reported critical (supplyChainRisk) alert "malware" on a@1.0.0.',
+    };
+    const t = setup({
+      local: { findings: [], notChecked: [], purls: ['pkg:npm/a@1.0.0'], purlLocations: { 'pkg:npm/a@1.0.0': 'tools/package.json' } },
+      scanPackages: vi.fn(async () => ({ ok: true as const, value: [malware] })),
+    });
+    const r = await t.scanner.scan({ repoUrl: URL_ });
+    expect(r.ok && r.verdict.findings[0]?.location).toEqual({ file: 'tools/package.json' });
+  });
   test('onScanned runs once per finished scan: not for a cached answer, a failed clone or a bad url, and a throw does not fail the scan', async () => {
     const seen: string[] = [];
     const t = setup({ onScanned: (v) => void seen.push(v.level) });

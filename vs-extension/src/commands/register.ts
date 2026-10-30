@@ -78,6 +78,20 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   // arrives later, is shown beside the verdict, and cannot change it.
   const showAndExplain = (rec: ScanRecord): void => {
     showVerdictPanel(context, rec, handlers);
+    const needsSocket = (rec.packages?.length ?? 0) > 0 && rec.verdict.notChecked.some((n) => /package scan|socket/i.test(n));
+    if (needsSocket) {
+      void vscode.window
+        .showInformationMessage('Stack3: set a Socket API key so packages in this repo can be checked.', 'Set Socket API key')
+        .then((pick) => (pick ? vscode.commands.executeCommand(SET_SOCKET_KEY) : undefined));
+    }
+    if (rec.verdict.findings.length > 0) {
+      void (async () => {
+        const key = (await context.secrets.get(CLAUDE_KEY_SECRET)) ?? process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+        if (key?.trim()) return;
+        const pick = await vscode.window.showInformationMessage('Stack3: set a Claude API key to explain this result.', 'Set Claude API key');
+        if (pick) await vscode.commands.executeCommand(SET_CLAUDE_KEY);
+      })();
+    }
     void explainRecord(rec, {
       settings: getSettings,
       providers: {

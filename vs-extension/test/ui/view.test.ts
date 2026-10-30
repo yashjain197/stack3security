@@ -60,6 +60,50 @@ describe('buildView', () => {
     const v = buildView(makeRec('high'));
     expect(JSON.parse(JSON.stringify(v))).toEqual(v);
   });
+  test('clone-scan packages are listed with a searchable label and a viewable file', () => {
+    const rec = makeRec('no_known_issues', {
+      packages: [
+        { purl: 'pkg:npm/lodash@4.17.21', file: 'package-lock.json' },
+        { purl: 'pkg:npm/%40types/node@22.20.5', file: 'tools/package.json' },
+      ],
+    });
+    const v = buildView(rec);
+    expect(v.packages).toEqual([
+      { label: 'lodash@4.17.21', purl: 'pkg:npm/lodash@4.17.21', file: 'package-lock.json', canView: true, flagged: false },
+      { label: '@types/node@22.20.5', purl: 'pkg:npm/%40types/node@22.20.5', file: 'tools/package.json', canView: true, flagged: false },
+    ]);
+    expect(v.hiddenPackages).toBe(0);
+    expect(v.packagesScanned).toBe(2);
+  });
+  test('a clone with no packages still reports zero scanned', () => {
+    expect(buildView(makeRec('no_known_issues')).packagesScanned).toBe(0);
+  });
+  test('packages named by a finding are flagged and listed first', () => {
+    const rec = makeRec(
+      'high',
+      {
+        packages: [
+          { purl: 'pkg:npm/lodash@4.17.21' },
+          { purl: 'pkg:npm/evil@1.0.0' },
+          { purl: 'pkg:npm/express@4.18.2' },
+        ],
+      },
+      [
+        {
+          ...f('high'),
+          source: 'socket',
+          layer: 'dependency',
+          title: 'Socket.dev flagged evil@1.0.0: malware',
+          evidence: 'Socket.dev reported high (supplyChainRisk) alert "malware" on evil@1.0.0.',
+        },
+      ],
+    );
+    expect(buildView(rec).packages.map((p) => [p.label, p.flagged])).toEqual([
+      ['evil@1.0.0', true],
+      ['lodash@4.17.21', false],
+      ['express@4.18.2', false],
+    ]);
+  });
 });
 
 describe('buildReport', () => {

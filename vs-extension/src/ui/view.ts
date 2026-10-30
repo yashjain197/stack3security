@@ -1,4 +1,5 @@
 import { clip } from '../engine/rules/evidence';
+import { labelFromPurl, mentionsPackage } from '../engine/purls';
 import type { Level, Severity } from '../engine/types';
 import type { ScanRecord } from '../quarantine/registry';
 import { redact } from '../verdict/redact';
@@ -6,6 +7,7 @@ import { BUTTON_LABEL, HEADLINE, LEVEL_LABEL, OPEN_ANYWAY, type ActionName } fro
 import { safeRelPath } from './paths';
 
 export const MAX_FINDINGS_SHOWN = 200;
+export const MAX_PACKAGES_SHOWN = 2000;
 
 /** D-3: which buttons a level offers, primary first. critical never offers a plain Open. */
 export function buttonsFor(level: Level): ActionName[] {
@@ -29,6 +31,15 @@ export interface ViewFinding {
   canView: boolean;
 }
 
+export interface ViewPackage {
+  label: string;
+  purl: string;
+  file?: string;
+  canView: boolean;
+  /** True when a finding names this package. Flagged cards sort first and render as red. */
+  flagged: boolean;
+}
+
 export interface ViewButton {
   action: ActionName;
   label: string;
@@ -44,6 +55,9 @@ export interface ViewModel {
   target: string;
   findings: ViewFinding[];
   hiddenFindings: number;
+  packages: ViewPackage[];
+  hiddenPackages: number;
+  packagesScanned: number;
   notChecked: string[];
   guidance: string[];
   buttons: ViewButton[];
@@ -85,6 +99,23 @@ export function buildView(rec: ScanRecord): ViewModel {
     target: clip(v.target.id, 200),
     findings: shown,
     hiddenFindings: Math.max(0, ordered.length - shown.length),
+    packages: [...(rec.packages ?? [])]
+      .map((p) => {
+        const file = p.file && safeRelPath(p.file) ? p.file : undefined;
+        const rawLabel = labelFromPurl(p.purl);
+        const textOf = (f: (typeof v.findings)[number]) => `${f.title}\n${f.evidence}`;
+        return {
+          label: clip(rawLabel, 200),
+          purl: clip(p.purl, 300),
+          flagged: v.findings.some((f) => mentionsPackage(textOf(f), p.purl, rawLabel)),
+          ...(file ? { file } : {}),
+          canView: Boolean(file),
+        } satisfies ViewPackage;
+      })
+      .sort((a, b) => Number(b.flagged) - Number(a.flagged))
+      .slice(0, MAX_PACKAGES_SHOWN),
+    hiddenPackages: Math.max(0, (rec.packages ?? []).length - MAX_PACKAGES_SHOWN),
+    packagesScanned: (rec.packages ?? []).length,
     notChecked: v.notChecked.slice(0, 50).map((n) => clip(n, 300)),
     guidance: v.actions.slice(0, 10).map((a) => clip(a, 200)),
     buttons: [...buttons, { action: 'copyReport', label: BUTTON_LABEL.copyReport, primary: false }],
@@ -99,6 +130,9 @@ export function buildReport(rec: ScanRecord): string {
   for (const f of v.findings.map(redact)) {
     const where = f.location ? ` (${f.location.file}${f.location.line ? `:${f.location.line}` : ''})` : '';
     lines.push(`[${f.severity}] ${f.title}${where}`, `    ${f.evidence}`);
+  }
+  if (rec.packages?.length) {
+    lines.push('', `Packages (${rec.packages.length}):`, ...rec.packages.slice(0, MAX_PACKAGES_SHOWN).map((p) => `  - ${clip(labelFromPurl(p.purl), 200)}`));
   }
   if (v.notChecked.length) lines.push('', 'Not checked:', ...v.notChecked.map((n) => `  - ${clip(n, 300)}`));
   lines.push('', 'Produced by Stack3 detection rules. Not a guarantee.');

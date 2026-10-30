@@ -41,17 +41,27 @@ describe('copy (I-15)', () => {
 
 describe('styles: nothing is green (I-15)', () => {
   const css = readFileSync(join(root, 'webview/styles.css'), 'utf8');
-  test('no green keyword and no green-dominant color', () => {
+  const PKG_OK = '2e7d32'; // package-ok marker only; not a safety claim
+  test('no green keyword and no green-dominant color except the package-ok marker', () => {
     expect(css).not.toMatch(/green|lime|teal|#0f0\b/i);
     const hexes = [...css.matchAll(/#([0-9a-f]{6})\b/gi)].map((m) => m[1]!);
     expect(hexes.length).toBeGreaterThan(0);
+    expect(hexes.map((h) => h.toLowerCase())).toContain(PKG_OK);
     for (const h of hexes) {
+      if (h.toLowerCase() === PKG_OK) continue;
       const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
       expect(g > r + 15 && g > b + 15, `#${h} looks green`).toBe(false);
     }
   });
   test('uses no remote resources and no inline-style dependence', () => {
     expect(css).not.toMatch(/url\(\s*['"]?https?:|@import/i);
+  });
+  test('layout scales with the panel instead of a single fixed column', () => {
+    expect(css).toMatch(/clamp\(/);
+    expect(css).toMatch(/@media \(max-width: 480px\)/);
+    expect(css).toMatch(/@media \(min-width: 720px\)/);
+    expect(css).toMatch(/@media \(min-width: 1100px\)/);
+    expect(css).toMatch(/overflow-x:\s*hidden/);
   });
 });
 
@@ -78,5 +88,13 @@ describe('the webview page script', () => {
   });
   test('creates no anchors or images from data', () => {
     expect(src).not.toMatch(/createElement\(\s*['"](a|img|iframe|script|link|object|embed)['"]/i);
+  });
+  test('the clone-scan panel lets the user search the packages that were checked', () => {
+    expect(src).toContain("section('Packages')");
+    expect(src).toContain("q.placeholder = 'Search packages'");
+    expect(src).toContain("q.addEventListener('input', draw)");
+    expect(src.indexOf("section('Packages')")).toBeLessThan(src.indexOf("section('Findings')"));
+    expect(src).toContain("package${packagesScanned === 1 ? '' : 's'} scanned");
+    expect(src).toContain("p.flagged ? 'package flagged' : 'package ok'");
   });
 });

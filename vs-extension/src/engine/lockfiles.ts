@@ -1,15 +1,28 @@
-import { parseJsonc } from './parsers/jsonc';
 import { parseBun } from './parsers/lockfiles/bun';
 import { parseNpm } from './parsers/lockfiles/npm';
 import { parsePnpm } from './parsers/lockfiles/pnpm';
-import type { LockEntry } from './parsers/lockfiles/types';
+import { classifySpec, type LockEntry } from './parsers/lockfiles/types';
 import { parseYarn1 } from './parsers/lockfiles/yarn1';
 import { parseYarnBerry } from './parsers/lockfiles/yarnBerry';
 import type { VirtualFile } from './types';
 
 export const UNRESOLVED = 'Exact package versions unresolved';
-const MAX_PURLS = 5000;
+export const MAX_PURLS = 5000;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+export const dirOf = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+export const inNodeModules = (p: string): boolean => p.startsWith('node_modules/') || p.includes('/node_modules/');
+export const isExactVersion = (spec: string): boolean => SEMVER.test(spec);
+
+/** Floor version from a range (`^4.18.2` → `4.18.2`). Tags, `latest`, `*` and git/file specs stay unresolved. */
+export function versionFromSpec(spec: string): string | undefined {
+  const s = spec.trim();
+  if (isExactVersion(s)) return s;
+  if (classifySpec(s) !== undefined) return undefined;
+  const rest = s.replace(/^(?:>=|<=|\^|~|=|v|>|<)\s*/i, '').trim();
+  if (!rest || /[xX*]|\s|\|\|/.test(rest)) return undefined;
+  return isExactVersion(rest) ? rest : undefined;
+}
 
 export interface ParsedLockfile {
   path: string;
@@ -23,8 +36,6 @@ export interface LockAnalysis {
 }
 
 const baseName = (p: string): string => p.slice(p.lastIndexOf('/') + 1);
-const dirOf = (p: string): string => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
-const inNodeModules = (p: string): boolean => p.startsWith('node_modules/') || p.includes('/node_modules/');
 
 function parserFor(file: VirtualFile): ((text: string) => LockEntry[]) | undefined {
   switch (baseName(file.path)) {
@@ -40,16 +51,6 @@ function parserFor(file: VirtualFile): ((text: string) => LockEntry[]) | undefin
     default:
       return undefined;
   }
-}
-
-function hasDependencies(text: string): boolean {
-  const { value } = parseJsonc(text);
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return ['dependencies', 'devDependencies', 'optionalDependencies'].some((k) => {
-    const section = v[k];
-    return typeof section === 'object' && section !== null && Object.keys(section).length > 0;
-  });
 }
 
 /** Purl-safe form of `pkg:npm/%40scope/name@1.2.3`: each segment encoded, the scope slash kept. */
@@ -81,7 +82,7 @@ export function analyzeLockfiles(files: VirtualFile[]): LockAnalysis {
     }
   }
 
-  // A manifest with dependencies needs a lockfile in its directory or above it (workspaces share a root lockfile).
+  // A workspace shares a root lockfile. bun.lockb is binary and is not read: it covers nothing.
   const covered = (dir: string): boolean => {
     for (let d = dir; ; d = dirOf(d)) {
       if (lockDirs.has(d)) return true;
@@ -90,17 +91,14 @@ export function analyzeLockfiles(files: VirtualFile[]): LockAnalysis {
   };
   for (const f of files) {
     if (inNodeModules(f.path)) continue;
-    const name = baseName(f.path);
-    if (name === 'package.json' && f.text !== undefined && hasDependencies(f.text) && !covered(dirOf(f.path))) notChecked.add(UNRESOLVED);
-    // bun.lockb is binary and is not read: it only covers nothing.
-    if (name === 'bun.lockb' && !covered(dirOf(f.path))) notChecked.add(UNRESOLVED);
+    if (baseName(f.path) === 'bun.lockb' && !covered(dirOf(f.path))) notChecked.add(UNRESOLVED);
   }
 
   const purls = new Set<string>();
   for (const lf of lockfiles) {
     for (const e of lf.entries) {
       // file:, link:, workspace and git packages are unknown to a registry scanner; their folders are scanned directly.
-      if ((e.source === 'registry' || e.source === 'http') && SEMVER.test(e.version)) purls.add(purlOf(e.name, e.version));
+      if ((e.source === 'registry' || e.source === 'http') && isExactVersion(e.version)) purls.add(purlOf(e.name, e.version));
     }
   }
   let list = [...purls].sort();

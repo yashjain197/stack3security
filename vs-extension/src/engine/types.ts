@@ -50,6 +50,8 @@ export interface EngineResult {
   findings: Finding[];
   notChecked: string[];
   purls: string[];
+  /** First file that named each package URL. Used to locate Socket findings. */
+  purlLocations?: Record<string, string>;
 }
 
 export type Rule = (files: VirtualFile[], ctx: ScanContext) => Finding[];

@@ -2,6 +2,7 @@ import type * as vscode from 'vscode';
 import { PACKAGE_SCAN_UNAVAILABLE, buildVerdict } from '../api/merge';
 import type { PackageResult, Stack3Client } from '../api/client';
 import { clip } from '../engine/rules/evidence';
+import { locatePackageFindings } from '../engine/purls';
 import type { EngineResult, Finding, Indicators, Verdict } from '../engine/types';
 
 /** Files whose change can change a verdict. Everything is matched under every workspace folder. */
@@ -91,7 +92,7 @@ export function registerWatchers(_ctx: Pick<vscode.ExtensionContext, 'subscripti
       if (disposed || !states.has(root.path)) return;
       if (remote.ok) {
         const loose: Finding[] = [];
-        for (const f of remote.value) {
+        for (const f of locatePackageFindings(remote.value, local.purlLocations ?? {})) {
           const purl = PURL_IN_TEXT.exec(`${f.evidence} ${f.title}`)?.[0];
           if (purl === undefined) loose.push(f);
           else if (current.has(purl)) st.byPurl.set(purl, [...(st.byPurl.get(purl) ?? []), f]);

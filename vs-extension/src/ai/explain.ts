@@ -42,8 +42,26 @@ const isPublicSource = (rec: ScanRecord): boolean => /^https:\/\/github\.com\//.
  */
 export async function explainRecord(rec: ScanRecord, deps: ExplainDeps): Promise<void> {
   const s = deps.settings();
-  if (s.explainMode === 'never' || rec.verdict.findings.length === 0) return;
+  if (s.explainMode === 'never') return;
   if (s.explainMode === 'publicOnly' && !isPublicSource(rec)) return;
+
+  // A clean GitHub clone still needs a count so the user can see Socket/lockfile collection ran.
+  if (rec.verdict.findings.length === 0) {
+    const n = rec.packages?.length ?? 0;
+    const socketNote = rec.verdict.notChecked.find((x) => /package scan|socket/i.test(x));
+    deps.post(rec.scanId, {
+      state: 'ready',
+      explanation: n === 0
+        ? 'The rules found no issues. This repository had no npm packages with exact versions to check.'
+        : `The rules found no issues. Stack3 listed ${n} npm package${n === 1 ? '' : 's'} in this repository.`,
+      fix: socketNote
+        ? socketNote
+        : n === 0
+          ? 'If you expected dependencies, check that a lockfile or pinned versions are present.'
+          : 'Search the package list below to inspect a dependency.',
+    });
+    return;
+  }
 
   const provider = s.explainProvider === 'claude' ? deps.providers.claude() : deps.providers.api();
 
