@@ -23,6 +23,37 @@ describe('single signals → caution', () => {
 
 describe('combinations', () => {
   test('two distinct signals in one file → high', () => expect(lvl('src/a.js', `${EVAL}\n${IP}`)).toEqual(['high']));
+  // Rehearsal 3: vite, wagmi and hardhat are ordinary tools whose tests spawn processes and mention .env.
+  test('regression: code-only capabilities together (child-process + new-function) → caution, not high', () => {
+    expect(lvl('packages/vite/src/node/utils.ts', `${CP}\n${FN}`)).toEqual(['caution']);
+    expect(lvl('src/a.js', `${EVAL}\n${CP}`)).toEqual(['caution']);
+  });
+  test('regression: several signals in a test, spec, playground or fixture file → caution', () => {
+    for (const p of ['packages/create-wagmi/src/cli.test.ts', 'playground/html/__tests__/html.spec.ts', 'playground/fs-serve/root/windows83Filename.ts', 'test/helpers/run.js', 'e2e/app.js']) {
+      expect(lvl(p, `${CP}\n${SECRET}`)).toEqual(['caution']);
+    }
+  });
+  test('but a secret read next to a spawn in ordinary source stays high, and a decode-and-run in a test file is not softened', () => {
+    expect(lvl('src/send.js', `${CP}\n${SECRET}`)).toEqual(['high']);
+    expect(lvl('test/payload.js', `${B64}\n${EVAL}`)).toEqual(['high']);
+    expect(lvl('test/payload.js', `${B64}\n${EVAL}\n${SECRET}`)).toEqual(['critical']);
+  });
+  // Rehearsal 3: vite documents its `server.fs.deny` default (['.env', ...]) in a comment.
+  test('regression: documentation in a comment is not a signal', () => {
+    expect(lvl('src/server.ts', `import cp from 'child_process';\n  * @default ['.env', '.env.*', '*.pem']\n// see child_process and eval( in the docs`)).toEqual(['caution']);
+    expect(lvl('src/a.ts', `/* spawns child_process\n * reads '.ssh/'\n */`)).toEqual([]);
+  });
+  // Rehearsal 3: vite lists '.env' among the files its dev server refuses to serve.
+  test('regression: a bare ".env" list item is data, not a secret read; the same name inside a call still is', () => {
+    expect(lvl('src/server.ts', `import { execSync } from 'node:child_process';\nconst deny = [\n  '.env',\n  '.env.*',\n  ".env.local", // never served\n];`)).toEqual(['caution']);
+    expect(lvl('src/a.js', `const f = [\n  '.env',\n];`)).toEqual([]);
+    expect(lvl('src/a.js', `fs.readFileSync('.env');`)).toEqual(['caution']);
+    expect(lvl('src/a.js', `const deny = ['.env', '.ssh/id_rsa'];`)).toEqual(['caution']);
+  });
+  test('code after a closing comment on the same line is still read', () => {
+    expect(lvl('src/a.js', `/* note */ eval(x);`)).toEqual(['caution']);
+    expect(lvl('src/a.js', ` */ eval(x);`)).toEqual(['caution']);
+  });
   test('the same signal twice is still one signal → caution', () => expect(lvl('src/a.js', `${EVAL}\n${EVAL}`)).toEqual(['caution']));
   test('base64 decode next to eval → high; with a secret path read → critical', () => {
     expect(lvl('src/a.js', `${B64}\n${EVAL}`)).toEqual(['high']);

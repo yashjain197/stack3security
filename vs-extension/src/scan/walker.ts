@@ -2,6 +2,7 @@ import { constants, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import type { ScanLimits } from '../config/settings';
 import type { Finding, VirtualFile } from '../engine/types';
+import { EXCLUDED_NOTE, isExcluded } from './exclude';
 import { isInside } from './paths';
 
 export interface WalkOptions {
@@ -9,6 +10,8 @@ export interface WalkOptions {
   includeGitConfig: boolean;
   /** `committed`: a cloned repo shipped node_modules, read only its package.json files. `skip`: installed deps, ignore. */
   nodeModules: 'committed' | 'skip';
+  /** Relative paths to leave out (the user's own list, never a clone's). Anything skipped is reported as not checked. */
+  exclude?: readonly string[];
 }
 
 export interface WalkResult {
@@ -109,6 +112,10 @@ export async function walk(root: string, limits: ScanLimits, opts: WalkOptions):
         continue;
       }
       if (st.isSymbolicLink()) continue;
+      if (opts.exclude?.length && isExcluded(rel, opts.exclude)) {
+        notChecked.add(EXCLUDED_NOTE);
+        continue;
+      }
       if (st.isDirectory()) {
         if (dir.depth + 1 > limits.maxDepth) {
           notChecked.add('Stopped at the folder depth limit; some files were not checked');

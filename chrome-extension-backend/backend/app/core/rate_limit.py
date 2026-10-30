@@ -109,3 +109,5 @@ class Limits:
     GRAPH_REPORT_USER = Limit("graph_report_user", 30, 3600)
     GRAPH_READ_USER = Limit("graph_read_user", 120, 600)
     PROTECTION_USER = Limit("protection_user", 300, 600)
+    SCAN_REPO_IP = Limit("scan_repo_ip", 8, 600)
+    STATS_IP = Limit("stats_ip", 60, 600)

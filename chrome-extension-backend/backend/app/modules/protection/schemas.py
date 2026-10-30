@@ -6,7 +6,7 @@ Made by Yash Jain with passion.
 
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.schemas.base import ApiModel
 
@@ -80,3 +80,29 @@ class ScriptCheckIn(ApiModel):
 
     origin: str | None = Field(default=None, max_length=512)
     scripts: list[str] = Field(min_length=1, max_length=40)
+
+
+class RepoScanIn(ApiModel):
+    """A public GitHub repository. ref, when set, is the commit Imran scanned."""
+
+    repo_url: str = Field(min_length=1, max_length=300)
+    ref: str | None = Field(default=None, max_length=40)
+
+
+class PackageScanIn(ApiModel):
+    """npm package ids for Socket. Each one is pkg:npm/name@version."""
+
+    purls: list[str] = Field(min_length=1, max_length=40)
+
+    @field_validator("purls")
+    @classmethod
+    def _package_ids(cls, values: list[str]) -> list[str]:
+        """Reject anything that is not an npm package URL with a version."""
+        cleaned = []
+        for raw in values:
+            purl = raw.strip()
+            name = purl.removeprefix("pkg:npm/")
+            if purl == name or "@" not in name or name.startswith("@") and name.count("@") < 2:
+                raise ValueError("each package must be pkg:npm/name@version")
+            cleaned.append(purl)
+        return cleaned

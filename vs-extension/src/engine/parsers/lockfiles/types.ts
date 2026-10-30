@@ -13,6 +13,8 @@ export interface LockEntry {
 }
 
 export const REGISTRY_HOSTS: ReadonlySet<string> = new Set(['registry.npmjs.org', 'registry.yarnpkg.com']);
+/** Where GitHub serves the source tarball of a `github:user/repo#ref` dependency. That is a git dependency, not another registry. */
+const GITHUB_TARBALL_HOSTS: ReadonlySet<string> = new Set(['codeload.github.com']);
 
 const GIT = /^(?:git\+|git:|git@|ssh:\/\/|github:|gitlab:|bitbucket:|gist:)/i;
 const GITHUB_SHORTHAND = /^(?!@)[\w.-]+\/[\w.-]+(?:#.*)?$/;
@@ -35,7 +37,9 @@ export function classifyProtocol(s: string | undefined): Source | undefined {
   if (/^workspace:/i.test(s)) return 'workspace';
   if (/^https?:\/\//i.test(s)) {
     const host = hostOf(s);
-    return s.toLowerCase().startsWith('https:') && host && REGISTRY_HOSTS.has(host) ? 'registry' : 'http';
+    const https = s.toLowerCase().startsWith('https:');
+    if (https && host && GITHUB_TARBALL_HOSTS.has(host)) return 'git';
+    return https && host && REGISTRY_HOSTS.has(host) ? 'registry' : 'http';
   }
   return undefined;
 }

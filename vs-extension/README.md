@@ -57,16 +57,27 @@ All settings are user-level: a repository cannot change them, and they are disab
 | `stack3.explain.sendSnippets` | `publicOnly` (default), `always` or `never`. |
 | `stack3.report.mode` | `publicAuto` (default), `ask` or `never`. |
 | `stack3.scan.limits` | Bounds on files, bytes, depth and time. Hitting one gives `unknown`. |
+| `stack3.scan.exclude` | Paths to leave out of the scan of one folder you open (your own test fixtures, build output). `{"/home/me/proj": ["test/fixtures", "dist"]}`. Only that exact folder, only the Problems-panel and unknown-folder scans, never *Clone and scan safely*. The verdict says some paths were not checked. |
 
 ## Limits, stated plainly
 
-- Only public GitHub repositories can be cloned this way. For a private repo, scan the folder instead.
+- **No Solana or other non-EVM chains.** Wallet addresses are recognised for EVM chains only. Packages bundled into a
+  repo's own files cannot be mapped to a package.
+- **Public GitHub repositories only** can be cloned this way. For a private repo, scan the folder instead.
+- **The warning for a folder opened directly is best effort.** VS Code may show its own trust prompt first, and tasks may
+  already have run in a folder you had trusted before Stack3 started.
+- **Stats reset on restart.** The repo-scan service keeps its live counters (`GET /v1/internal/stats`) in memory only, so
+  they start again at zero when the service restarts (`since` in the answer says when).
 - git must be a release that contains the 2024 clone fixes (2.39.4, 2.40.2, 2.41.1, 2.42.2, 2.43.4, 2.44.1, 2.45.1 or
   newer). An older git is refused with a message.
-- The warning for a folder opened directly is best effort: VS Code may show its own trust prompt first.
-- Solana and non-EVM chains are not covered. Packages bundled into a repo's own files cannot be mapped to a package.
+- Rules look for known patterns, not intent: `no_known_issues` is never a promise that code is safe, and a repository with
+  no lockfile reports `unknown` because its package versions cannot be checked.
 
 ## Install from a file
 
 `code --install-extension stack3-vscode-0.1.0.vsix` (Cursor: `cursor --install-extension …`). Check the file against
 the published SHA-256 first.
+
+## Licence
+
+MIT, see `LICENSE`. A scan reports known patterns only; it is not a guarantee that code is safe to run.

@@ -4,7 +4,11 @@
   "description": "Scan a repo before you open it: auto-run files, install scripts, malicious packages and leaked secrets.",
   "version": "0.1.0",
   "publisher": "stack3",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
+  "homepage": "https://github.com/yashjain197/stack3security/tree/main/vs-extension#readme",
+  "bugs": {
+    "url": "https://github.com/yashjain197/stack3security/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/yashjain197/stack3security.git",
@@ -18,7 +22,6 @@
     "malware",
     "workspace trust"
   ],
-  "private": true,
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -43,6 +46,7 @@
         "stack3.explain.provider",
         "stack3.explain.sendSnippets",
         "stack3.report.mode",
+        "stack3.scan.exclude",
         "stack3.scan.limits"
       ]
     }
@@ -118,6 +122,18 @@
             "maxDepth": 32,
             "timeoutMs": 30000
           }
+        },
+        "stack3.scan.exclude": {
+          "type": "object",
+          "scope": "application",
+          "default": {},
+          "markdownDescription": "Paths to leave out of Stack3's scan of one folder you open, for example your own test fixtures. A map from the folder's full path to a list of paths inside it, such as `{\"/home/me/proj\": [\"test/fixtures\", \"dist\"]}`. Only that exact folder is affected, only guard scans use it (never *Clone and scan safely*), and the verdict says that some paths were not checked. Set it in your user settings only: a repo's own settings cannot change it.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     }
@@ -133,6 +149,8 @@
     "check:bundle": "node scripts/check-bundle.mjs",
     "check:regexes": "node scripts/check-regexes.mjs",
     "package": "npm run build && node scripts/check-bundle.mjs && vsce package --no-dependencies",
+    "publish:marketplace": "npm run build && node scripts/check-bundle.mjs && vsce publish --no-dependencies",
+    "publish:openvsx": "npm run build && node scripts/check-bundle.mjs && npx --yes ovsx@0.10.1 publish --no-dependencies",
     "ci": "npm run lint && npm run typecheck && npm run coverage && npm run check:regexes && npm run build && npm run check:bundle"
   },
   "dependencies": {

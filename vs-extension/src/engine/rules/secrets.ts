@@ -9,7 +9,8 @@ const MAX_PER_FILE = 10;
 const severityFor = (ctx: ScanContext) => (ctx.mode === 'clone' ? 'caution' : 'high');
 
 // A 64-hex value is only a key when something nearby says so; otherwise it is a hash.
-const KEY_CONTEXT = /private|priv_?key|secret|mnemonic|seed|wallet|signer|deployer|\bpk\b|\bkey\b/i;
+// "private" alone is not context: it is a visibility keyword in Solidity, TypeScript and Java (`bytes32 private constant TYPEHASH = 0x...`).
+const KEY_CONTEXT = /private[\s_-]?key|priv_?key|secret|mnemonic|seed|wallet|signer|deployer|\bpk\b|\bkey\b/i;
 const KEY_FILE = /(?:^|\/)(?:\.env[^/]*|[^/]*\.(?:key|pk)|id_[a-z0-9]+)$/i;
 
 function lines(text: string): { line: number; text: string }[] {

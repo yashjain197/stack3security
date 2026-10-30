@@ -1,0 +1,56 @@
+name: vscode-extension-publish
+
+# Publishes vs-extension to the VS Code Marketplace (and Open VSX for Cursor / VSCodium).
+# Run it by pushing a tag `vscode-v<version>` (it must match vs-extension/package.json) or by hand from the Actions tab.
+# Needs the repository secrets VSCE_PAT (Marketplace) and, optionally, OVSX_PAT (Open VSX). See vs-extension/PUBLISHING.md.
+on:
+  push:
+    tags: ['vscode-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: vs-extension
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vs-extension/package-lock.json
+
+      - run: npm ci --ignore-scripts
+
+      # A tag that disagrees with package.json would publish the wrong version: stop.
+      - name: Tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          [ "${GITHUB_REF_NAME}" = "vscode-v${v}" ] || { echo "tag ${GITHUB_REF_NAME} != vscode-v${v}"; exit 1; }
+
+      # The same gate as every build: lint, tsc, tests, ReDoS check, bundle check.
+      - run: npm run ci
+
+      - name: Publish to the VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          [ -n "$VSCE_PAT" ] || { echo "Secret VSCE_PAT is not set"; exit 1; }
+          npx vsce publish --no-dependencies
+
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          [ -n "$OVSX_PAT" ] || { echo "OVSX_PAT not set, skipping Open VSX"; exit 0; }
+          npx --yes ovsx@0.10.1 publish --no-dependencies -p "$OVSX_PAT"

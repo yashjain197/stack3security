@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
+import { MAX_FOLDERS, MAX_PATTERNS_PER_FOLDER, normalizeExclude } from '../scan/exclude';
 import { DEFAULT_LIMITS, type ScanLimits } from './limits';
 
 export { DEFAULT_LIMITS };
@@ -13,6 +15,8 @@ export interface Stack3Settings {
   explainProvider: 'ollama' | 'api';
   ollamaModel: string;
   limits: ScanLimits;
+  /** Folder (absolute path) → paths to leave out of the guard scan of that folder. User level only. */
+  scanExclude: Record<string, string[]>;
 }
 
 export const DEFAULT_OLLAMA_MODEL = 'qwen2.5-coder:7b';
@@ -40,6 +44,17 @@ function sanitizeLimits(value: unknown): ScanLimits {
   return out;
 }
 
+function sanitizeExclude(value: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [folder, patterns] of Object.entries(value as Record<string, unknown>).slice(0, MAX_FOLDERS)) {
+    if (!path.isAbsolute(folder) || folder.length > 1000 || !Array.isArray(patterns)) continue;
+    const clean = [...new Set(patterns.slice(0, MAX_PATTERNS_PER_FOLDER).map(normalizeExclude).filter((p): p is string => p !== undefined))];
+    if (clean.length > 0) out[folder] = clean;
+  }
+  return out;
+}
+
 export function getSettings(): Stack3Settings {
   const cfg = vscode.workspace.getConfiguration('stack3');
   const apiUrl = userValue<unknown>(cfg, 'apiUrl', '');
@@ -51,5 +66,6 @@ export function getSettings(): Stack3Settings {
     explainProvider: oneOf(userValue<unknown>(cfg, 'explain.provider', 'ollama'), ['ollama', 'api'], 'ollama'),
     ollamaModel: ((m) => (typeof m === 'string' && MODEL_NAME.test(m) ? m : DEFAULT_OLLAMA_MODEL))(userValue<unknown>(cfg, 'explain.ollamaModel', DEFAULT_OLLAMA_MODEL)),
     limits: sanitizeLimits(userValue<unknown>(cfg, 'scan.limits', DEFAULT_LIMITS)),
+    scanExclude: sanitizeExclude(userValue<unknown>(cfg, 'scan.exclude', {})),
   };
 }

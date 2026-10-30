@@ -14,8 +14,8 @@ function el(tag: string, className?: string, text?: string): HTMLElement {
   return e;
 }
 
-function button(label: string, primary: boolean, onClick: () => void): HTMLButtonElement {
-  const b = el('button', primary ? 'btn primary' : 'btn', label) as HTMLButtonElement;
+function button(label: string, primary: boolean, onClick: () => void, extraClass = ''): HTMLButtonElement {
+  const b = el('button', `${primary ? 'btn primary' : 'btn'}${extraClass ? ` ${extraClass}` : ''}`, label) as HTMLButtonElement;
   b.type = 'button';
   b.addEventListener('click', onClick);
   return b;
@@ -65,10 +65,20 @@ function render(scanId: string, view: ViewModel): void {
 
   const head = el('header', `head level-${view.level}`);
   head.append(el('span', 'badge', view.label), el('h1', undefined, view.headline), el('p', 'target', view.target));
+  const counts = new Map<string, number>();
+  for (const f of view.findings) counts.set(f.severity, (counts.get(f.severity) ?? 0) + 1);
+  if (counts.size > 0) {
+    const summary = el('div', 'summary');
+    for (const sev of ['critical', 'high', 'caution']) {
+      const n = counts.get(sev);
+      if (n) summary.append(el('span', `chip sev-${sev}`, `${n} ${sev}`));
+    }
+    head.append(summary);
+  }
   app.append(head);
 
   const bar = el('div', 'buttons');
-  for (const b of view.buttons) bar.append(button(b.label, b.primary, () => act(b.action)));
+  for (const b of view.buttons) bar.append(button(b.label, b.primary, () => act(b.action), b.action === 'delete' ? 'danger' : ''));
   app.append(bar);
 
   // The AI explanation sits under the verdict and is filled in when (and if) it arrives. Text only, never markup.
@@ -86,7 +96,7 @@ function render(scanId: string, view: ViewModel): void {
     li.append(el('span', 'sev', f.severity), el('strong', 'title', f.title));
     if (f.file) li.append(el('div', 'where', f.line ? `${f.file}:${f.line}` : f.file));
     li.append(el('pre', 'evidence', f.evidence));
-    if (f.canView && f.file) li.append(button('View file', false, () => act('viewFile', f.file)));
+    if (f.canView && f.file) li.append(button('View file', false, () => act('viewFile', f.file), 'small'));
     list.append(li);
   }
   findings.append(list);

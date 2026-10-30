@@ -28,7 +28,7 @@ function isEngineResult(v: unknown): v is EngineResult {
   return !!r && Array.isArray(r.findings) && Array.isArray(r.notChecked) && Array.isArray(r.purls);
 }
 
-function runOnce(root: string, ctx: ScanContext, limits: ScanLimits, deps: SchedulerDeps): Promise<EngineResult> {
+function runOnce(root: string, ctx: ScanContext, limits: ScanLimits, deps: SchedulerDeps, exclude: string[]): Promise<EngineResult> {
   return new Promise((resolve) => {
     let worker: WorkerLike;
     try {
@@ -52,16 +52,16 @@ function runOnce(root: string, ctx: ScanContext, limits: ScanLimits, deps: Sched
     });
     worker.on('error', () => finish(failed('Scan failed')));
     worker.on('exit', () => finish(failed('Scan failed')));
-    worker.postMessage({ root, ctx, limits });
+    worker.postMessage({ root, ctx, limits, exclude });
   });
 }
 
-/** Scan `root` in an isolated, killable worker (I-13). Concurrent calls for the same root and mode share one run. */
-export function runScan(root: string, ctx: ScanContext, limits: ScanLimits, deps: SchedulerDeps = {}): Promise<EngineResult> {
-  const key = `${ctx.mode}\0${root}`;
+/** Scan `root` in an isolated, killable worker (I-13). Concurrent calls for the same root, mode and exclusions share one run. */
+export function runScan(root: string, ctx: ScanContext, limits: ScanLimits, deps: SchedulerDeps = {}, exclude: string[] = []): Promise<EngineResult> {
+  const key = `${ctx.mode}\0${root}\0${exclude.join('\0')}`;
   const existing = inFlight.get(key);
   if (existing) return existing;
-  const p = runOnce(root, ctx, limits, deps).finally(() => inFlight.delete(key));
+  const p = runOnce(root, ctx, limits, deps, exclude).finally(() => inFlight.delete(key));
   inFlight.set(key, p);
   return p;
 }

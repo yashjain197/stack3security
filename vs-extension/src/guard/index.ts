@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { createClient } from '../api/client';
 import { getSettings } from '../config/settings';
+import { excludesFor } from '../scan/exclude';
 import { runScan } from '../scan/scheduler';
 import { createStatusBar } from '../ui/statusbar';
 import { notCheckedDiagnostics, toDiagnostics } from '../ui/diagnostics';
@@ -20,7 +21,7 @@ export function registerGuard(context: vscode.ExtensionContext): void {
 
   // Flow 2: a folder opened directly gets a quick look the moment it opens, before the first watcher scan.
   const unknownFolderDeps: UnknownFolderDeps = {
-    scan: (root) => runScan(root, { mode: 'quick', checkedAt: new Date().toISOString() }, QUICK_LIMITS),
+    scan: (root) => runScan(root, { mode: 'quick', checkedAt: new Date().toISOString() }, QUICK_LIMITS, {}, excludesFor(getSettings().scanExclude, root)),
     showModal: async (title, detail, buttons) => vscode.window.showWarningMessage(title, { modal: true, detail }, ...buttons),
     closeFolder: () => vscode.commands.executeCommand('workbench.action.closeFolder'),
     state: context.globalState,
@@ -41,7 +42,10 @@ export function registerGuard(context: vscode.ExtensionContext): void {
           .filter((f) => f.uri.scheme === 'file')
           .map((f): RootInfo => ({ path: f.uri.fsPath, name: f.name })),
       // Settings are read when a scan runs, and only their user-level values are used (I-10).
-      scan: (root) => runScan(root, { mode: 'workspace', checkedAt: new Date().toISOString() }, getSettings().limits),
+      scan: (root) => {
+        const s = getSettings();
+        return runScan(root, { mode: 'workspace', checkedAt: new Date().toISOString() }, s.limits, {}, excludesFor(s.scanExclude, root));
+      },
       client: () => {
         const s = getSettings();
         return createClient({ baseUrl: s.apiUrl, allowLocalhost: s.allowLocalhost, clientVersion: String((context.extension.packageJSON as { version?: string }).version ?? '') });

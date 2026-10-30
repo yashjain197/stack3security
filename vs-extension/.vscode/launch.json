@@ -7,6 +7,7 @@
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--disable-extensions"],
+      "env": { "STACK3_MOCK": "1" },
       "outFiles": ["${workspaceFolder}/dist/**/*.js"]
     }
   ]

@@ -24,6 +24,30 @@ interface Hit {
   line: number;
 }
 
+/**
+ * A line that is only a comment is not code: documentation that names `.env` or `child_process` is not behaviour. A line
+ * that closes a block comment (`*\/`) can carry code after it, so it is not skipped.
+ */
+const isCommentLine = (l: string): boolean => {
+  const t = l.trimStart();
+  return t.startsWith('//') || ((t.startsWith('*') || t.startsWith('/*')) && !l.includes('*/'));
+};
+
+/**
+ * A line that is only a quoted name, as an item of a list (`'.env',`), is data: tools list `.env` in the deny list of a dev
+ * server or an ignore list. A read puts the name inside a call, so it shares its line with one. (Splitting the name from
+ * the call across lines would hide it from this signal; see DECISIONS D-16.)
+ */
+const isBareLiteral = (l: string): boolean => {
+  const t = l.trim();
+  const q = t[0];
+  if (q !== '"' && q !== "'" && q !== '`') return false;
+  const close = t.indexOf(q, 1);
+  if (close < 2 || close > 201) return false;
+  const rest = t.slice(close + 1).trimStart();
+  return rest === '' || rest.startsWith('//') || rest.replace(/^,/, '').trim() === '' || rest.replace(/^,/, '').trimStart().startsWith('//');
+};
+
 const isLoopback = (ip: string): boolean => ip.startsWith('127.') || ip === '0.0.0.0';
 
 function scan(file: VirtualFile): Map<Signal, Hit> {
@@ -42,6 +66,10 @@ function scan(file: VirtualFile): Map<Signal, Hit> {
     if (end < 0) end = text.length;
     const l = text.slice(start, Math.min(end, start + MAX_LINE));
     const at = (i: number): Hit => ({ offset: start + i, line });
+    if (isCommentLine(l)) {
+      start = end + 1;
+      continue;
+    }
 
     const ev = RE.eval.exec(l);
     if (ev) (note('eval', at(ev.index)), sinks.push(at(ev.index)));
@@ -58,7 +86,7 @@ function scan(file: VirtualFile): Map<Signal, Hit> {
       }
     }
     const sp = RE.secretPath.exec(l);
-    if (sp) note('secret-path-read', at(sp.index));
+    if (sp && !isBareLiteral(l)) note('secret-path-read', at(sp.index));
 
     start = end + 1;
   }
@@ -68,20 +96,29 @@ function scan(file: VirtualFile): Map<Signal, Hit> {
   return found;
 }
 
-function classify(signals: Map<Signal, Hit>): { ruleId: string; severity: Severity; title: string } | undefined {
+// Tests, playgrounds and fixtures are run on purpose, not by opening a folder or installing, and they spawn processes and
+// mention `.env` all the time. Not a place where the decode-and-run combos below stop mattering (see classify).
+const TESTISH = /(?:^|\/)(?:tests?|__tests__|specs?|e2e|playgrounds?|fixtures?|__fixtures__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/i;
+// Capabilities that only run code. Without a secret read, a decode or a raw-IP address there is nothing to steal or hide.
+const EXEC_ONLY = new Set<Signal>(['eval', 'new-function', 'child-process']);
+
+function classify(path: string, signals: Map<Signal, Hit>): { ruleId: string; severity: Severity; title: string } | undefined {
   const names = [...signals.keys()];
   if (names.length === 0) return undefined;
   if (signals.has('base64-exec') && signals.has('secret-path-read')) {
     return { ruleId: 'source.decode-exec-secret', severity: 'critical', title: 'Code decodes hidden text, runs it, and reads a secret location' };
   }
-  if (names.length >= 2) return { ruleId: 'source.multiple-signals', severity: 'high', title: `Code combines several risky behaviours (${names.join(', ')})` };
+  if (names.length >= 2) {
+    const quiet = !signals.has('base64-exec') && (TESTISH.test(path) || names.every((n) => EXEC_ONLY.has(n)));
+    return { ruleId: 'source.multiple-signals', severity: quiet ? 'caution' : 'high', title: `Code combines several risky behaviours (${names.join(', ')})` };
+  }
   return { ruleId: `source.${names[0]}`, severity: 'caution', title: `Code uses a risky pattern (${names[0]})` };
 }
 
 function sourceRule(file: VirtualFile, ctx: ScanContext): Finding[] {
   if (file.text === undefined || !SOURCE_FILE.test(file.path) || GENERATED.test(file.path)) return [];
   const signals = scan(file);
-  const c = classify(signals);
+  const c = classify(file.path, signals);
   if (!c) return [];
   const first = Math.min(...[...signals.values()].map((h) => h.line));
   let evidence = `Signals: ${[...signals.keys()].join(', ')}`;

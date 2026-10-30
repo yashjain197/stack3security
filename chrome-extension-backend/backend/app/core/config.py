@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     rules_remote: bool = True
     # Public domain registration lookup. Tests turn this off and pin dates instead.
     rdap_remote: bool = True
+    # Imran's repo-scan service. This API calls it with the service key; the website never sees the key.
+    repo_scan_url: str = "https://vs-ext-backend.stack3security.workers.dev"
 
     internal_service_key: SecretStr = SecretStr("dev-only-internal-key-change-me-0123456789")
 
