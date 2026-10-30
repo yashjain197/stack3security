@@ -22,7 +22,15 @@ export type ScanVerdict = {
   explanation?: string | null;
 };
 
-export type ScanKind = "website" | "contract" | "transaction";
+export type ScanKind = "website" | "contract" | "transaction" | "repo";
+
+// Live counters from the repo-scan service, via GET /v1/stats on the Chrome API.
+export type ScanStats = {
+  reposScanned: number;
+  threatsFound: number;
+  byLevel: Record<Verdict, number>;
+  since: string;
+};
 
 // A completed live scan, kept in this browser's scan history.
 export type ScanRecord = {

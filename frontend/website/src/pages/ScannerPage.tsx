@@ -82,7 +82,6 @@ export function ScannerPage() {
               <h2>Inspect a website</h2>
               <p>Enter any URL or domain. Only the hostname is sent to the Stack3 API.</p>
             </div>
-            <span className="scanner-icon"><Icon name="scan" /></span>
           </div>
           <form id="scanner-form" className="form-stack" noValidate onSubmit={submit}>
             <label htmlFor="website-url">Website URL</label>

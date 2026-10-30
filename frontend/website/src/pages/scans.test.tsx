@@ -5,6 +5,7 @@ import { makeApi, renderPage, type FakeRequest } from "../test/helpers";
 import { ContractsPage } from "./ContractsPage";
 import { DashboardPage } from "./DashboardPage";
 import { ReportsPage } from "./ReportsPage";
+import { RepositoriesPage } from "./RepositoriesPage";
 import { ScannerPage } from "./ScannerPage";
 import { TransactionsPage } from "./TransactionsPage";
 
@@ -137,4 +138,65 @@ test("dashboard and reports show the saved live scans", async () => {
 test("reports show an empty state before any scan", () => {
   renderPage("/dashboard/reports", <ReportsPage />, makeApi(vi.fn<FakeRequest>()), "/dashboard/reports");
   expect(screen.getByText("No scans yet")).toBeInTheDocument();
+});
+
+test("repository scanner normalizes the repo, allows a long scan and shows file locations", async () => {
+  const request = vi.fn<FakeRequest>(async () => ({
+    level: "critical",
+    target: { type: "repo", id: "github.com/acme/widget" },
+    findings: [
+      { layer: "repo-file", severity: "critical", title: "Install script downloads and runs code", evidence: "postinstall pipes curl into sh.", location: { file: "package.json", line: 12 }, source: "rules", checkedAt: "2026-10-30T10:00:00Z" },
+      { layer: "secret", severity: "high", title: "Private key committed", evidence: "A PEM private key is in the repository.", location: { file: "deploy/key.pem" }, source: "rules", checkedAt: "2026-10-30T10:00:00Z" },
+    ],
+    indicators: { addresses: [], domains: [] },
+    notChecked: [],
+    actions: ["Do not install this package."],
+    explanation: null,
+  }));
+  renderPage("/dashboard/repos", <RepositoriesPage />, makeApi(request), "/dashboard/repos");
+
+  await userEvent.type(screen.getByLabelText("GitHub repository"), "https://github.com/acme/widget.git");
+  await userEvent.click(screen.getByRole("button", { name: /scan repository/i }));
+
+  expect(await screen.findByText("Install script downloads and runs code")).toBeInTheDocument();
+  expect(request).toHaveBeenCalledWith("/v1/scan-repo", expect.objectContaining({
+    method: "POST", body: { repoUrl: "https://github.com/acme/widget" }, timeoutMs: 120_000,
+  }));
+  expect(screen.getByText("package.json:12")).toBeInTheDocument();
+  expect(screen.getByText("deploy/key.pem")).toBeInTheDocument();
+  expect(screen.getByText("Private key committed")).toBeInTheDocument();
+  expect(document.querySelector(".severity-summary")?.textContent).toBe("1 critical1 high risk");
+});
+
+test("repository scanner rejects something that is not a GitHub repo", async () => {
+  const request = vi.fn<FakeRequest>();
+  renderPage("/dashboard/repos", <RepositoriesPage />, makeApi(request), "/dashboard/repos");
+  await userEvent.type(screen.getByLabelText("GitHub repository"), "https://gitlab.com/a/b/c");
+  await userEvent.click(screen.getByRole("button", { name: /scan repository/i }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("public GitHub repository");
+  expect(request).not.toHaveBeenCalled();
+});
+
+test("dashboard shows the live scan-service counters", async () => {
+  const request = vi.fn<FakeRequest>(async (path) => {
+    if (path === "/v1/stats") return { reposScanned: 1234, threatsFound: 56, byLevel: {}, since: "2026-10-01T00:00:00Z" };
+    throw new Error(`unexpected ${path}`);
+  });
+  renderPage("/dashboard", <DashboardPage />, makeApi(request), "/dashboard");
+  expect(await screen.findByText("1,234")).toBeInTheDocument();
+  expect(screen.getByText("56")).toBeInTheDocument();
+  expect(request).toHaveBeenCalledWith("/v1/stats", expect.objectContaining({ authenticated: false }));
+});
+
+test("long reports show the first findings and expand on request", async () => {
+  const findings = Array.from({ length: 30 }, (_, index) => ({
+    layer: "dependency", severity: "caution", title: `Finding ${index + 1}`, evidence: "e", source: "rules", checkedAt: "2026-10-30T10:00:00Z",
+  }));
+  const request = vi.fn<FakeRequest>(async () => ({ level: "caution", target: { type: "repo", id: "github.com/a/b" }, findings, indicators: { addresses: [], domains: [] }, notChecked: [], actions: [], explanation: null }));
+  renderPage("/dashboard/repos", <RepositoriesPage />, makeApi(request), "/dashboard/repos?repo=a/b");
+
+  expect(await screen.findByText("Finding 25")).toBeInTheDocument();
+  expect(screen.queryByText("Finding 26")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Show all 30 findings" }));
+  expect(screen.getByText("Finding 30")).toBeInTheDocument();
 });

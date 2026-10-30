@@ -85,6 +85,11 @@ export function FindingCard({ finding, index = 1 }: { finding: Finding; index?: 
         <span className="finding-layer">{layerLabels[finding.layer] ?? finding.layer} signal</span>
       </div>
       <h3>{finding.title}</h3>
+      {finding.location?.file ? (
+        <code className="finding-location">
+          {finding.location.file}{finding.location.line ? `:${finding.location.line}` : ""}
+        </code>
+      ) : null}
       <p>{finding.evidence}</p>
       <details className="technical-details">
         <summary>View technical details</summary>
@@ -97,12 +102,6 @@ export function FindingCard({ finding, index = 1 }: { finding: Finding; index?: 
             <strong>Checked</strong>
             <span>{new Date(finding.checkedAt).toLocaleString()}</span>
           </div>
-          {finding.location?.file ? (
-            <div>
-              <strong>Location</strong>
-              <span>{finding.location.file}{finding.location.line ? `:${finding.location.line}` : ""}</span>
-            </div>
-          ) : null}
         </div>
       </details>
     </article>

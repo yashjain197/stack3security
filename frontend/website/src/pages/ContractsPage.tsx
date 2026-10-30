@@ -76,7 +76,6 @@ export function ContractsPage() {
             <h2>Review a contract</h2>
             <p>Runs a live scan through Sourcify, the block explorer, the chain's RPC and the Stack3 threat graph.</p>
           </div>
-          <span className="scanner-icon"><Icon name="blocks" /></span>
         </div>
         <form id="contract-form" className="form-stack" noValidate onSubmit={submit}>
           <label htmlFor="contract-chain">Network</label>

@@ -11,6 +11,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ScannerPage } from "./pages/ScannerPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
 import { ContractsPage } from "./pages/ContractsPage";
+import { RepositoriesPage } from "./pages/RepositoriesPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { GraphPage } from "./pages/GraphPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -32,6 +33,7 @@ const routeTitles: Record<string, string> = {
   "/dashboard/scanner": "Website scanner — Stack3 Security",
   "/dashboard/transactions": "Transaction analyzer — Stack3 Security",
   "/dashboard/contracts": "Contract overview — Stack3 Security",
+  "/dashboard/repos": "Repository scanner — Stack3 Security",
   "/dashboard/graph": "Threat graph — Stack3 Security",
   "/dashboard/reports": "Scan reports — Stack3 Security",
   "/dashboard/settings": "Settings — Stack3 Security",
@@ -112,6 +114,7 @@ export function App({ api, startupError }: { api: ApiClient; startupError: ApiEr
           <Route path="/dashboard/scanner" element={<DashboardRoute><ScannerPage /></DashboardRoute>} />
           <Route path="/dashboard/transactions" element={<DashboardRoute><TransactionsPage /></DashboardRoute>} />
           <Route path="/dashboard/contracts" element={<DashboardRoute><ContractsPage /></DashboardRoute>} />
+          <Route path="/dashboard/repos" element={<DashboardRoute><RepositoriesPage /></DashboardRoute>} />
           <Route path="/dashboard/graph" element={<DashboardRoute><GraphPage /></DashboardRoute>} />
           <Route path="/dashboard/reports" element={<DashboardRoute><ReportsPage /></DashboardRoute>} />
           <Route path="/dashboard/settings" element={<DashboardRoute><SettingsPage /></DashboardRoute>} />

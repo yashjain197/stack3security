@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { ApiClient } from "./api";
-import type { ScanKind, ScanRecord, ScanVerdict, TxReviewRequest } from "../types";
+import type { ScanKind, ScanRecord, ScanStats, ScanVerdict, TxReviewRequest } from "../types";
 
 // ---------- Live checks (Stack3 protection API) ----------
 
@@ -17,6 +17,28 @@ export function scanContract(api: ApiClient, chainId: number, address: string, s
 
 export function reviewTransaction(api: ApiClient, review: TxReviewRequest, signal?: AbortSignal): Promise<ScanVerdict> {
   return api.request<ScanVerdict>("/v1/review-tx", { method: "POST", body: review, signal });
+}
+
+// ---------- Repository scans (VS Code scan service, through the Chrome API) ----------
+// The Chrome API holds the scan service's key, so the browser never talks to it directly.
+
+export function scanRepository(api: ApiClient, repoUrl: string, signal?: AbortSignal): Promise<ScanVerdict> {
+  // The scan service clones and scores the repo; it allows up to about 100 seconds.
+  return api.request<ScanVerdict>("/v1/scan-repo", { method: "POST", body: { repoUrl }, signal, timeoutMs: 120_000 });
+}
+
+export function getScanStats(api: ApiClient, signal?: AbortSignal): Promise<ScanStats> {
+  return api.request<ScanStats>("/v1/stats", { authenticated: false, signal });
+}
+
+/** "owner/name", "github.com/owner/name" or a full URL → https://github.com/owner/name. */
+export function normalizeRepoUrl(input: string): string {
+  const trimmed = input.trim().replace(/\.git$/, "").replace(/\/+$/, "");
+  const match = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?(?:github\.com\/)?([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})$/);
+  if (!match || match[2] === "." || match[2] === "..") {
+    throw new Error("Enter a public GitHub repository, e.g. github.com/owner/name.");
+  }
+  return `https://github.com/${match[1]}/${match[2]}`;
 }
 
 // ---------- Input helpers ----------
@@ -117,4 +139,5 @@ export const scanKindLabels: Record<ScanKind, string> = {
   website: "Website",
   contract: "Contract",
   transaction: "Transaction",
+  repo: "Repository",
 };

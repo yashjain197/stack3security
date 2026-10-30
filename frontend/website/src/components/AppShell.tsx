@@ -9,6 +9,7 @@ const navItems: { path: string; label: string; icon: IconName }[] = [
   { path: "/dashboard/scanner", label: "Website scanner", icon: "scan" },
   { path: "/dashboard/transactions", label: "Transactions", icon: "arrows" },
   { path: "/dashboard/contracts", label: "Contracts", icon: "blocks" },
+  { path: "/dashboard/repos", label: "Repositories", icon: "code" },
   { path: "/dashboard/graph", label: "Threat graph", icon: "graph" },
   { path: "/dashboard/reports", label: "Reports", icon: "file" },
   { path: "/dashboard/settings", label: "Settings", icon: "settings" },

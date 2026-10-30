@@ -1,9 +1,25 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon, type IconName } from "../components/Icon";
 import { PageHeading } from "../components/ui";
 import { ReportTable } from "../components/results";
-import { useScanHistory } from "../lib/scans";
-import { useSession } from "../lib/session";
+import { getScanStats, useScanHistory } from "../lib/scans";
+import { useApi, useSession } from "../lib/session";
+import type { ScanStats } from "../types";
+
+/** Live repo-scan counters from the scan service. Hidden when the service cannot be reached. */
+function useScanStats(): ScanStats | null {
+  const api = useApi();
+  const [stats, setStats] = useState<ScanStats | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    getScanStats(api, controller.signal)
+      .then((data) => setStats(typeof data?.reposScanned === "number" && typeof data.threatsFound === "number" ? data : null))
+      .catch(() => setStats(null));
+    return () => controller.abort();
+  }, [api]);
+  return stats;
+}
 
 function SeverityRow({ label, count, className }: { label: string; count: number; className: string }) {
   return (
@@ -30,12 +46,13 @@ function QuickAction({ icon, title, description, path }: { icon: IconName; title
 export function DashboardPage() {
   const { user } = useSession();
   const { records } = useScanHistory(user?.id);
+  const stats = useScanStats();
   const count = (level: string) => records.filter((record) => record.verdict.level === level).length;
-  const cards: [string, number, string, IconName, string][] = [
-    ["Scans run", records.length, "Live scans saved in this browser", "grid", "stat-blue"],
-    ["Critical", count("critical"), "Scans rated critical", "shield", "stat-red"],
-    ["Needs review", count("high") + count("caution"), "High-risk and caution results", "scan", "stat-amber"],
-    ["No known issues", count("no_known_issues"), "Not a guarantee of safety", "spark", "stat-green"],
+  const cards: [string, number, string][] = [
+    ["Scans run", records.length, "Live scans saved in this browser"],
+    ["Critical", count("critical"), "Scans rated critical"],
+    ["Needs review", count("high") + count("caution"), "High-risk and caution results"],
+    ["No known issues", count("no_known_issues"), "Not a guarantee of safety"],
   ];
   return (
     <>
@@ -50,17 +67,24 @@ export function DashboardPage() {
         }
       />
       <section className="stats-grid">
-        {cards.map(([label, value, note, icon, color]) => (
+        {cards.map(([label, value, note]) => (
           <article className="stat-card" key={label}>
             <div className="stat-top">
               <span>{label}</span>
-              <span className={`stat-icon ${color}`}><Icon name={icon} /></span>
             </div>
             <strong>{value}</strong>
             <small>{note}</small>
           </article>
         ))}
       </section>
+      {stats ? (
+        <p className="service-stats">
+          <span>Stack3 scan service</span>
+          <span><strong>{stats.reposScanned.toLocaleString()}</strong> repositories scanned</span>
+          <span><strong>{stats.threatsFound.toLocaleString()}</strong> critical or high-risk</span>
+          <span>since {new Date(stats.since).toLocaleDateString()}</span>
+        </p>
+      ) : null}
       <div className="dashboard-grid">
         <section className="panel activity-panel">
           <div className="panel-header">
@@ -109,6 +133,7 @@ export function DashboardPage() {
           <QuickAction icon="scan" title="Scan a website" description="Blocklists, threat graph and lookalike checks." path="/dashboard/scanner" />
           <QuickAction icon="arrows" title="Review a transaction" description="Decode approvals, permits and signatures." path="/dashboard/transactions" />
           <QuickAction icon="blocks" title="Check a contract" description="Verification, owner control and age." path="/dashboard/contracts" />
+          <QuickAction icon="code" title="Scan a repository" description="Install scripts, secrets and dependencies." path="/dashboard/repos" />
         </div>
       </section>
     </>

@@ -39,6 +39,8 @@ export type RequestOptions = {
   body?: unknown;
   authenticated?: boolean;
   signal?: AbortSignal;
+  /** Defaults to 15 seconds; repository scans need longer. */
+  timeoutMs?: number;
 };
 
 export type ApiClientOptions = {
@@ -106,7 +108,7 @@ export function createApiClient({
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function send(path: string, { method = "GET", body, authenticated = true, signal }: RequestOptions = {}, retry = true): Promise<any> {
+  async function send(path: string, { method = "GET", body, authenticated = true, signal, timeoutMs = 15000 }: RequestOptions = {}, retry = true): Promise<any> {
     const sentToken = token;
     const headers: Record<string, string> = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -118,16 +120,19 @@ export function createApiClient({
         headers,
         credentials: "include",
         cache: "no-store",
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
     } catch (error) {
       if (signal?.aborted) throw error;
+      if ((error as Error).name === "TimeoutError") {
+        throw new ApiError("The API took too long to answer. Try again in a moment.", { code: "timeout" });
+      }
       throw new ApiError("Cannot reach the API. Check that the backend is running and try again.");
     }
     if (response.status === 401 && authenticated && retry) {
       if (!token || token === sentToken) await refresh();
-      return send(path, { method, body, authenticated, signal }, false);
+      return send(path, { method, body, authenticated, signal, timeoutMs }, false);
     }
     if (response.status === 204) return null;
     let data;

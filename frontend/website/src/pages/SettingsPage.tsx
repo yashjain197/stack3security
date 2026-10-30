@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { errorMessage, formatDateTime, useApi } from "../lib/session";
+import { getScanStats } from "../lib/scans";
 import type { Account, HealthCheck } from "../types";
 import {
   AccountErrorView,
@@ -17,7 +18,12 @@ type SettingsData = {
   healthChecks: PromiseSettledResult<HealthCheck>[];
 };
 
-const healthLabels = ["API process", "Database and Redis readiness", "VS Code scan service"];
+const healthLabels = [
+  "Chrome API process",
+  "Database and Redis readiness",
+  "VS Code scan service",
+  "Repository scans (Chrome API → scan service)",
+];
 
 // /scan-health is served by the website itself (server.js in production, the Vite
 // proxy in development), which forwards to the scan service's public /healthz.
@@ -43,6 +49,8 @@ export function SettingsPage() {
       api.request<HealthCheck>("/health", { authenticated: false, signal }),
       api.request<HealthCheck>("/health/ready", { authenticated: false, signal }),
       scanServiceHealth(signal),
+      // Repo scans go Chrome API → scan service with a shared key; /v1/stats exercises that whole path.
+      getScanStats(api, signal).then((stats): HealthCheck => ({ status: `ok, ${stats.reposScanned} repositories scanned` })),
     ]);
     return { account, healthChecks };
   });

@@ -134,7 +134,6 @@ export function TransactionsPage() {
             <h2>Review a wallet request</h2>
             <p>Nothing is signed or broadcast. The request is only decoded and checked by the Stack3 API.</p>
           </div>
-          <span className="scanner-icon"><Icon name="arrows" /></span>
         </div>
         <div className="segmented" role="tablist" aria-label="Request type">
           {modes.map((item) => (
