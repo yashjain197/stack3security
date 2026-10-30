@@ -3,6 +3,7 @@ import { contractDetailsUrl, levelLabels, WEBSITE_URL } from "../../utils/api";
 import { chainName } from "../../utils/chains";
 import { shortAddress, subjectContractOf, summarizeReview } from "../../utils/decode";
 import type { LinkStart, TabCheckResult, Verdict, WalletReviewResult } from "../../utils/types";
+import logo from "../../assets/logo-dark.svg";
 
 type BackgroundReply<T> = { ok: true; data: T } | { ok: false; error: string; code?: string; status?: number };
 
@@ -214,12 +215,7 @@ export function App() {
   return (
     <main className="popup">
       <header className="popup-header">
-        <span className="popup-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-        </span>
+        <img className="popup-mark" src={logo} alt="" width={28} height={28} />
         <h1>stack3<span> security</span></h1>
       </header>
 

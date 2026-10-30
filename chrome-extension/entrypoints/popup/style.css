@@ -24,19 +24,10 @@ body {
 }
 
 .popup-mark {
-  display: inline-flex;
+  display: block;
   width: 28px;
   height: 28px;
-  padding: 5px;
-  box-sizing: border-box;
-  border-radius: 8px;
-  background: #0a0a0a;
-  color: #ffffff;
-}
-
-.popup-mark svg {
-  width: 100%;
-  height: 100%;
+  flex: 0 0 auto;
 }
 
 .popup-header h1 {
