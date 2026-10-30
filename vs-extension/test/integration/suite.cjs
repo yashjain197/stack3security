@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const EXT_ID = 'stack3.stack3-vscode';
+const EXT_ID = 'Stack3Security.stack3-vscode';
 const results = [];
 const record = (name, ok, detail) => results.push({ name, ok: Boolean(ok), detail: detail === undefined ? '' : String(detail) });
 const write = () => fs.writeFileSync(process.env.STACK3_RESULT, JSON.stringify(results, null, 2));

@@ -8,8 +8,8 @@ Marketplace **publisher** and a **Personal Access Token (PAT)**. Never commit or
 1. **Azure DevOps organization.** Sign in at dev.azure.com with a Microsoft account and create an organization (any name).
 2. **PAT.** User settings > Personal access tokens > New Token. Organization: **All accessible organizations**. Scopes:
    Custom defined > Show all scopes > **Marketplace > Manage**. Copy it once.
-3. **Publisher.** At marketplace.visualstudio.com/manage create a publisher with ID **`stack3`** (it must equal `publisher`
-   in `package.json`; the ID cannot be changed later). If `stack3` is taken, pick another and change `package.json`.
+3. **Publisher.** At marketplace.visualstudio.com/manage create a publisher with ID **`Stack3Security`** (it must equal `publisher`
+   in `package.json`; the ID cannot be changed later). If `Stack3Security` is taken, pick another and change `package.json`.
 4. *(Optional, for Cursor and VSCodium)* Create an account at open-vsx.org, create a namespace `stack3`, and make an access token.
 
 ## Publish from your machine
@@ -45,5 +45,5 @@ a higher `version` (VS Code ignores a rebuild with the same number).
 ## After publishing
 
 New extensions are scanned automatically and can take a few minutes to appear. Check the page at
-`https://marketplace.visualstudio.com/items?itemName=stack3.stack3-vscode` and install it on a fresh profile
-(`code --user-data-dir /tmp/s3 --install-extension stack3.stack3-vscode`).
+`https://marketplace.visualstudio.com/items?itemName=Stack3Security.stack3-vscode` and install it on a fresh profile
+(`code --user-data-dir /tmp/s3 --install-extension Stack3Security.stack3-vscode`).

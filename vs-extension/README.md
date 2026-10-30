@@ -96,7 +96,7 @@ All settings are user-level: a repository cannot change them, and they are disab
 
 ## Install from a file
 
-`code --install-extension stack3-vscode-0.1.1.vsix` (Cursor: `cursor --install-extension …`). Check the file against
+`code --install-extension stack3-vscode-0.1.2.vsix` (Cursor: `cursor --install-extension …`). Check the file against
 the published SHA-256 first.
 
 ## Licence
