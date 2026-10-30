@@ -1,6 +1,7 @@
 # Stack3 Security: whole-project stack.
-# Website on http://localhost:3000, Chrome/core API on http://localhost:8000, VS Code repo-scan API on
-# http://localhost:8080. Redis is local. Postgres is Supabase (DATABASE_URL in chrome-extension-backend/backend/.env).
+# Website (frontend/website — React + TypeScript + Vite) on http://localhost:3000, Chrome/core API on
+# http://localhost:8000, VS Code repo-scan API on http://localhost:8080. Redis is local. Postgres is Supabase
+# (DATABASE_URL in chrome-extension-backend/backend/.env).
 # Made by Yash Jain with passion.
 #
 # Run:   docker-compose up --build -d
@@ -16,7 +17,7 @@ name: stack3
 services:
   webpage:
     build:
-      context: ./frontend/webpage
+      context: ./frontend/website
     environment:
       API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
     restart: unless-stopped

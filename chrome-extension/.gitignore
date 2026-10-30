@@ -1,0 +1,11 @@
+# WXT
+.wxt
+.output
+web-ext.config.ts
+
+# Dependencies
+node_modules
+
+# Environment
+.env
+.env.*

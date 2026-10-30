@@ -6,7 +6,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-COPY --chown=node:node package.json server.js index.html app.js api.js account.js html.js styles.css mock-data.js security-service.js ./
+COPY --chown=node:node package.json server.js index.html app.js api.js account.js graph.js html.js styles.css mock-data.js security-service.js ./
 
 USER node
 

@@ -8,11 +8,13 @@ import {
 } from "./security-service.js";
 import { createApiClient } from "./api.js";
 import { accountPaths, createAccountUI } from "./account.js";
+import { createGraphUI } from "./graph.js";
 import { escapeHtml } from "./html.js";
 
 const app = document.querySelector("#app");
 let api;
 let accountUI;
+let graphUI;
 let renderVersion = 0;
 let startupError = null;
 let initialized = false;
@@ -24,6 +26,7 @@ const routeTitles = {
   "/dashboard/scanner": "Website scanner — Stack3 Security",
   "/dashboard/transactions": "Transaction analyzer — Stack3 Security",
   "/dashboard/contracts": "Contract overview — Stack3 Security",
+  "/dashboard/graph": "Threat graph — Stack3 Security",
   "/dashboard/reports": "Scan reports — Stack3 Security",
   "/dashboard/settings": "Settings — Stack3 Security",
   "/login": "Sign in — Stack3 Security",
@@ -40,6 +43,7 @@ const navItems = [
   { path: "/dashboard/scanner", label: "Website scanner", icon: "scan" },
   { path: "/dashboard/transactions", label: "Transactions", icon: "arrows" },
   { path: "/dashboard/contracts", label: "Contracts", icon: "blocks" },
+  { path: "/dashboard/graph", label: "Threat graph", icon: "graph" },
   { path: "/dashboard/reports", label: "Reports", icon: "file" },
   { path: "/dashboard/settings", label: "Settings", icon: "settings" },
   { path: "/account/billing", label: "Billing", icon: "file" },
@@ -52,6 +56,7 @@ const icons = {
   scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M7 12h10M12 7v10"/>',
   arrows: '<path d="M7 7h13l-3-3M17 17H4l3 3"/><path d="M17 4l3 3-3 3M7 14l-3 3 3 3"/>',
   blocks: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"/>',
+  graph: '<circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.5 6h9M6.3 8.2l4.4 7.6M17.7 8.2l-4.4 7.6"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a1.7 1.7 0 1 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 1 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 1 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 1 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 1 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V2a1.7 1.7 0 1 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 1 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 1 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2 2.9Z"/>',
   shield: '<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/>',
@@ -117,7 +122,7 @@ function appShell(content, activePath) {
     .join("");
   const email = api?.user?.email;
   const initial = escapeHtml(email?.charAt(0).toUpperCase() ?? "D");
-  return `<div class="app-shell"><aside class="sidebar"><a class="brand" href="/" data-link><span class="brand-mark">${svg("shield")}</span><span>stack3<span class="brand-light"> security</span></span></a><div class="workspace-label">WORKSPACE</div><nav class="side-nav" aria-label="Dashboard navigation">${links}</nav><div class="sidebar-bottom"><div class="sidebar-help"><span class="help-icon">${svg("spark")}</span><strong>Security, with context.</strong><p>Review evidence before you decide.</p><a href="/how-it-works" data-link>How it works ${svg("arrow")}</a></div><button class="user-profile" type="button" aria-label="Account settings" data-navigate="/dashboard/settings"><span class="avatar">${initial}</span><span class="user-info"><strong>${escapeHtml(email ?? "Demo workspace")}</strong><small>${email ? "Signed in" : "Demo mode"}</small></span><span class="profile-more">···</span></button><button class="sidebar-signout" type="button" data-account-action="logout">${svg("logout")}<span>Sign out</span></button></div></aside><div class="app-main"><header class="app-topbar"><button class="mobile-menu" aria-label="Toggle menu" aria-expanded="false">${svg("grid")}</button><div class="breadcrumbs"><a href="/dashboard" data-link>Workspace</a><span>/</span><strong>${escapeHtml(navItems.find((item) => item.path === activePath)?.label ?? "Account")}</strong></div><div class="topbar-right"><span class="demo-mode">${svg("shield")} ${activePath.startsWith("/dashboard") && activePath !== "/dashboard/settings" ? "DEMO SCANS" : "LIVE ACCOUNT"}</span><span class="topbar-avatar">${initial}</span></div></header><main class="dashboard-content">${content}</main><footer class="app-footer"><span>Stack3 Security · Scanning results are illustrative</span><span>Risk indicators, not a guarantee of safety.</span></footer></div></div>`;
+  return `<div class="app-shell"><aside class="sidebar"><a class="brand" href="/" data-link><span class="brand-mark">${svg("shield")}</span><span>stack3<span class="brand-light"> security</span></span></a><div class="workspace-label">WORKSPACE</div><nav class="side-nav" aria-label="Dashboard navigation">${links}</nav><div class="sidebar-bottom"><div class="sidebar-help"><span class="help-icon">${svg("spark")}</span><strong>Security, with context.</strong><p>Review evidence before you decide.</p><a href="/how-it-works" data-link>How it works ${svg("arrow")}</a></div><button class="user-profile" type="button" aria-label="Account settings" data-navigate="/dashboard/settings"><span class="avatar">${initial}</span><span class="user-info"><strong>${escapeHtml(email ?? "Demo workspace")}</strong><small>${email ? "Signed in" : "Demo mode"}</small></span><span class="profile-more">···</span></button><button class="sidebar-signout" type="button" data-account-action="logout">${svg("logout")}<span>Sign out</span></button></div></aside><div class="app-main"><header class="app-topbar"><button class="mobile-menu" aria-label="Toggle menu" aria-expanded="false">${svg("grid")}</button><div class="breadcrumbs"><a href="/dashboard" data-link>Workspace</a><span>/</span><strong>${escapeHtml(navItems.find((item) => item.path === activePath)?.label ?? "Account")}</strong></div><div class="topbar-right"><span class="demo-mode">${svg("shield")} ${activePath === "/dashboard/graph" ? "LIVE DATA" : activePath.startsWith("/dashboard") && activePath !== "/dashboard/settings" ? "DEMO SCANS" : "LIVE ACCOUNT"}</span><span class="topbar-avatar">${initial}</span></div></header><main class="dashboard-content">${content}</main><footer class="app-footer"><span>Stack3 Security · Scanning results are illustrative</span><span>Risk indicators, not a guarantee of safety.</span></footer></div></div>`;
 }
 
 function pageHeading(eyebrow, title, subtitle, action = "") {
@@ -226,6 +231,7 @@ async function render() {
   if (!initialized) return;
   const version = ++renderVersion;
   accountUI.stop();
+  graphUI.stop();
   if (api.signedIn) startupError = null;
   const path = location.pathname.replace(/\/+$/, "") || "/";
   document.title = routeTitles[path] ?? "Stack3 Security";
@@ -261,6 +267,11 @@ async function render() {
   else if (path === "/dashboard/scanner") app.innerHTML = scannerPage();
   else if (path === "/dashboard/transactions") app.innerHTML = transactionsPage();
   else if (path === "/dashboard/contracts") app.innerHTML = contractsPage();
+  else if (path === "/dashboard/graph") {
+    const params = new URLSearchParams(location.search);
+    app.innerHTML = appShell(graphUI.page(params), "/dashboard/graph");
+    graphUI.mount(params);
+  }
   else if (path === "/dashboard/reports") app.innerHTML = reportsPage();
   else app.innerHTML = notFoundPage();
   if (startupError) {
@@ -399,6 +410,7 @@ async function start() {
     });
     accountUI = createAccountUI({ api, navigate, render });
     accountUI.bind(app);
+    graphUI = createGraphUI({ api, navigate });
     try {
       await api.initialize();
     } catch (error) {
