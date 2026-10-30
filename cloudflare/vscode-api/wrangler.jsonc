@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vs-ext-backend",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-30",
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "ScanContainer",
+      "image": "../../vs-extension/Dockerfile",
+      "image_build_context": "../../vs-extension",
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCAN",
+        "class_name": "ScanContainer"
+      }
+    ]
+  },
+  "exports": {
+    "ScanContainer": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}

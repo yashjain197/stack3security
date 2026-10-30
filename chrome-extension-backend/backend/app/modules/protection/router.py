@@ -4,17 +4,30 @@ Chrome extension routes. Every check requires a logged-in token that includes ch
 Made by Yash Jain with passion.
 """
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.core.errors import Forbidden
 from app.core.rate_limit import Limits
-from app.modules.identity.dependencies import CurrentPrincipal, DbSession, Limiter
-from app.modules.protection import bundle, page
+from app.modules.identity.dependencies import (
+    CurrentPrincipal,
+    DbSession,
+    Limiter,
+    client_ip,
+    require_internal_service,
+)
+from app.modules.protection import bundle, page, repo
 from app.modules.protection.chain import scan_contract
 from app.modules.protection.domain import check_domain
 from app.modules.protection.review import review_tx
-from app.modules.protection.schemas import DomainCheckIn, PageScanIn, ScriptCheckIn, TxReviewIn
-from app.modules.protection.scripts import check_scripts
+from app.modules.protection.schemas import (
+    DomainCheckIn,
+    PackageScanIn,
+    PageScanIn,
+    RepoScanIn,
+    ScriptCheckIn,
+    TxReviewIn,
+)
+from app.modules.protection.scripts import check_scripts, scan_packages
 from app.schemas.verdict import Verdict
 
 router = APIRouter(prefix="/v1", tags=["chrome"])
@@ -84,3 +97,27 @@ async def post_check_scripts(
     """Map script URLs to packages and check the threat graph. Socket runs when its key is set."""
     await _guard(principal, limiter)
     return await check_scripts(db, payload)
+
+
+@router.post(
+    "/internal/scan-packages",
+    response_model=Verdict,
+    dependencies=[Depends(require_internal_service)],
+)
+async def post_scan_packages(payload: PackageScanIn, db: DbSession) -> Verdict:
+    """Socket and the threat graph for npm packages. Header: X-Service-Key. No user login."""
+    return await scan_packages(db, payload.purls)
+
+
+@router.post("/scan-repo")
+async def post_scan_repo(payload: RepoScanIn, request: Request, limiter: Limiter) -> Response:
+    """Score a public GitHub repo. This API holds the key and calls Imran's scan service."""
+    await limiter.hit(Limits.SCAN_REPO_IP, client_ip(request))
+    return await repo.scan_repo(payload)
+
+
+@router.get("/stats")
+async def get_stats(request: Request, limiter: Limiter) -> Response:
+    """Live repo-scan counts for the website. No login and no service key on this call."""
+    await limiter.hit(Limits.STATS_IP, client_ip(request))
+    return await repo.scan_stats()

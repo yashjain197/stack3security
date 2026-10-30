@@ -38,6 +38,34 @@ class _Script:
     purl: str | None
 
 
+async def scan_packages(db: AsyncSession, purls: list[str]) -> Verdict:
+    """Score npm packages with the threat graph and Socket. The Socket key never leaves this server."""
+    checked_at = utcnow()
+    nodes = await known_nodes(db, [("package", purl) for purl in purls])
+    found: list[Finding] = []
+    for purl in purls:
+        row = nodes.get(("package", purl))
+        if row is not None:
+            item = graph_finding(row, "package", checked_at)
+            if item is not None:
+                found.append(item)
+    skipped: list[str] = []
+    if not get_settings().socket_configured:
+        skipped.append("socket")
+    else:
+        socket_found, socket_failed = await _socket_all(purls, checked_at)
+        found.extend(socket_found)
+        if socket_failed:
+            skipped.append("socket")
+    target = purls[0] if len(purls) == 1 else f"{len(purls)} packages"
+    return finish(
+        Target(type=TargetType.PACKAGE, id=target[:512]),
+        found,
+        not_checked=skipped,
+        incomplete=False,
+    )
+
+
 async def check_scripts(db: AsyncSession, body: ScriptCheckIn) -> Verdict:
     """Score the scripts a page loaded. A known-malicious package or URL is critical."""
     checked_at = utcnow()

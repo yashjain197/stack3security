@@ -1,12 +1,11 @@
 # Stack3 Security: whole-project stack.
-# Runs the website (frontend/webpage) on http://localhost:3000 and the Chrome/core API (identity, billing, teams)
-# on http://localhost:8000 with Redis; the database is Supabase Postgres (DATABASE_URL in
-# chrome-extension-backend/backend/.env). Imran's VS Code API (`vscode-api`) and the Caddy reverse proxy will be
-# added here once their Dockerfiles exist.
+# Website (frontend/website — React + TypeScript + Vite) on http://localhost:3000, Chrome/core API on
+# http://localhost:8000, VS Code repo-scan API on http://localhost:8080. Redis is local. Postgres is Supabase
+# (DATABASE_URL in chrome-extension-backend/backend/.env).
 # Made by Yash Jain with passion.
 #
 # Run:   docker-compose up --build -d
-# Logs:  docker-compose logs -f chrome-api webpage
+# Logs:  docker-compose logs -f chrome-api webpage vscode-api
 # Stop:  docker-compose down
 #
 # Offline fallback (no Supabase): set in .env
@@ -18,7 +17,7 @@ name: stack3
 services:
   webpage:
     build:
-      context: ./frontend/webpage
+      context: ./frontend/website
     environment:
       API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
     restart: unless-stopped
@@ -65,6 +64,39 @@ services:
       postgres:
         condition: service_healthy
         required: false
+
+  # Imran's repo-scan service. Callers send X-Service-Key. It reports threats to chrome-api.
+  # SERVICE_KEY is INTERNAL_SERVICE_KEY from the Chrome API env file. Other secrets in that file are dropped
+  # before the process starts. Clones need a writable /tmp and are deleted after each scan.
+  vscode-api:
+    build:
+      context: ./vs-extension
+    restart: unless-stopped
+    env_file:
+      - ./chrome-extension-backend/backend/.env
+    environment:
+      STACK3_API_URL: http://chrome-api:8000
+      PORT: "8080"
+    tmpfs:
+      - /tmp:rw,mode=1777
+    read_only: true
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      chrome-api:
+        condition: service_started
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$SERVICE_KEY" ]; then export SERVICE_KEY="$$INTERNAL_SERVICE_KEY"; fi
+        unset DATABASE_URL JWT_PRIVATE_KEY SMTP_PASSWORD TIGERGRAPH_PASSWORD TIGERGRAPH_SECRET TIGERGRAPH_API_KEY DODO_API_KEY DODO_WEBHOOK_SECRET ETHERSCAN_API_KEY RPC_URL_ETHEREUM OTP_PEPPER INTERNAL_SERVICE_KEY REDIS_URL
+        exec node dist/server.js
 
   postgres:
     image: postgres:16-alpine

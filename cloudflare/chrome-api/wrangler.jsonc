@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "chrome-ext-backend",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-30",
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "ApiContainer",
+      "image": "../../chrome-extension-backend/backend/Dockerfile",
+      "image_build_context": "../../chrome-extension-backend/backend",
+      "instance_type": "basic",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "API",
+        "class_name": "ApiContainer"
+      }
+    ]
+  },
+  "exports": {
+    "ApiContainer": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}
