@@ -1,6 +1,6 @@
 import { parse as parseYaml } from 'yaml';
 import type { Finding, Rule, VirtualFile } from '../types';
-import { finding } from './evidence';
+import { finding, trimEndChars } from './evidence';
 
 const baseName = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 
@@ -23,7 +23,7 @@ function npmrcRule(file: VirtualFile, ctx: Parameters<Rule>[1]): Finding[] {
     const key = line.slice(0, eq).trim().toLowerCase().replace(/_/g, '-');
     const value = line.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
     const isRegistry = key === 'registry' || /^@[^:]+:registry$/.test(key);
-    const dangerous = key === 'script-shell' || key === 'node-options' || (isRegistry && value.replace(/\/+$/, '') !== NPM_REGISTRY);
+    const dangerous = key === 'script-shell' || key === 'node-options' || (isRegistry && trimEndChars(value, '/') !== NPM_REGISTRY);
     if (dangerous) out.push(finding(ctx, 'npmrc.dangerous-key', 'high', `.npmrc sets ${key}, which changes what npm runs or where it downloads from`, `${key}=${value}`, file.path, i + 1));
   });
   return out;

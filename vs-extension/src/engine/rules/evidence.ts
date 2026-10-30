@@ -10,6 +10,13 @@ export function clip(text: string, max = MAX_EVIDENCE): string {
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
 
+/** `text` without its trailing `chars`. A loop, not a regex: `/x+$/` is quadratic on a long run of x (ReDoS, I-14). */
+export function trimEndChars(text: string, chars: string): string {
+  let end = text.length;
+  while (end > 0 && chars.includes(text.charAt(end - 1))) end--;
+  return text.slice(0, end);
+}
+
 export function finding(
   ctx: ScanContext,
   ruleId: string,

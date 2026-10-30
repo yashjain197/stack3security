@@ -1,0 +1,9 @@
+# Ship only the bundles and the Marketplace pages. The repo-scan service (dist/server.js) is a separate deployment.
+**
+!package.json
+!README.md
+!LICENSE
+!dist/extension.js
+!dist/worker.js
+!dist/webview/main.js
+!dist/webview/styles.css

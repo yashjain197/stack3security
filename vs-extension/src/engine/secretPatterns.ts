@@ -21,7 +21,7 @@ const TOKENS: RegExp[] = [
   /\bAKIA[0-9A-Z]{16}\b/g,
   /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
   /\bsk-[A-Za-z0-9_-]{20,}/g,
-  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/g,
+  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/g, // JSON web token; starts at the beginning of a token run, so it is linear
   /(?<![0-9])\d{8,10}:[A-Za-z0-9_-]{30,}/g, // Telegram bot token, also inside /bot<id>:<token> URLs
   /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/gi,
   /\b[1-9A-HJ-NP-Za-km-z]{85,90}\b/g, // base58 secret key

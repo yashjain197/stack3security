@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import fc from 'fast-check';
+import { redactSecrets } from '../../src/engine/secretPatterns';
 import { redact, redactAll } from '../../src/verdict/redact';
 import type { Finding, Severity } from '../../src/engine/types';
 import { f } from '../engine/helpers';
@@ -129,5 +130,19 @@ describe('redactAll', () => {
   test('fewer than 20 are all returned; empty is empty', () => {
     expect(redactAll(many(3))).toHaveLength(3);
     expect(redactAll([])).toEqual([]);
+  });
+});
+
+describe('JSON web tokens (the pattern was quadratic on a long run of eyJ-)', () => {
+  const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N';
+  test('a token is removed, alone or in a header', () => {
+    expect(redactSecrets(`token ${JWT} end`)).not.toContain('dozjgNryP4J3');
+    expect(redactSecrets(`Authorization: Bearer ${JWT}`)).not.toContain('dozjgNryP4J3');
+  });
+  test('a long hostile run is fast', () => {
+    const hostile = 'eyJyJJJJJJJJJJJJ' + '-eyJJJJJJJ'.repeat(16_000);
+    const t = performance.now();
+    redactSecrets(hostile);
+    expect(performance.now() - t).toBeLessThan(500);
   });
 });

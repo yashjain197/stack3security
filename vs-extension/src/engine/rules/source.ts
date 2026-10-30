@@ -8,7 +8,14 @@ const MAX_LINE = 4096;
 const NEAR = 300;
 const SOURCE_FILE = /\.(?:js|cjs|mjs|jsx|ts|cts|mts|tsx)$/i;
 // Build and config code legitimately spawns processes.
-const SPAWN_OK = /(?:^|\/)(?:scripts|build|tools|config)\/|\.config\.[^/]+$/;
+const SPAWN_DIR = /(?:^|\/)(?:scripts|build|tools|config)\//;
+/** A file name like `webpack.config.js`: `.config.` followed by more name. Not a regex over the whole path, which is quadratic. */
+const isConfigFile = (path: string): boolean => {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const at = name.indexOf('.config.');
+  return at >= 0 && at + '.config.'.length < name.length;
+};
+const spawnOk = (path: string): boolean => SPAWN_DIR.test(path) || isConfigFile(path);
 
 type Signal = 'eval' | 'new-function' | 'base64-exec' | 'child-process' | 'raw-ip-url' | 'secret-path-read';
 
@@ -24,7 +31,7 @@ function scan(file: VirtualFile): Map<Signal, Hit> {
   const found = new Map<Signal, Hit>();
   const decodes: Hit[] = [];
   const sinks: Hit[] = [];
-  const spawnAllowed = SPAWN_OK.test(file.path);
+  const spawnAllowed = spawnOk(file.path);
   const note = (s: Signal, hit: Hit) => {
     if (!found.has(s)) found.set(s, hit);
   };

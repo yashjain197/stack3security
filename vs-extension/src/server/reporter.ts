@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { trimEndChars } from '../engine/rules/evidence';
 import { postJsonOnce, type Result } from '../api/client';
 import { validateGraphReport, type GraphReport } from '../report/graphReport';
 
@@ -15,7 +16,7 @@ export interface Reporter {
  * it yet (`synced: false` means it is saved and will be retried on their side).
  */
 export function createReporter(opts: { apiUrl: string; serviceKey: string; fetchImpl?: typeof fetch; timeoutMs?: number }): Reporter {
-  const url = `${opts.apiUrl.replace(/\/+$/, '')}/v1/internal/report`;
+  const url = `${trimEndChars(opts.apiUrl, '/')}/v1/internal/report`;
   return {
     async report(r) {
       if (validateGraphReport(r) !== undefined) return { ok: false, reason: 'The report was not valid, so it was not sent.' };

@@ -1,3 +1,4 @@
+import { trimEndChars } from './rules/evidence';
 import type { Finding, Indicators } from './types';
 
 const MAX_LINE = 4096;
@@ -56,7 +57,7 @@ function endpointFor(scheme: string, host: string, path: string): { domain: stri
   if (telegram) return { domain: `${host}/bot${telegram[1]}`, endpoint: `${scheme}://${host}/bot${telegram[1]}` };
   const discord = host === 'discord.com' || host === 'discordapp.com' ? /^\/api\/webhooks\/(\d{5,25})(?:\/|$)/.exec(clean) : null;
   if (discord) return { domain: `${host}/api/webhooks/${discord[1]}`, endpoint: `${scheme}://${host}/api/webhooks/${discord[1]}` };
-  return { domain: host, endpoint: `${scheme}://${host}${clean.replace(/[.,;:]+$/, '').slice(0, 100)}` };
+  return { domain: host, endpoint: `${scheme}://${host}${trimEndChars(clean, '.,;:').slice(0, 100)}` };
 }
 
 /** Wallet addresses and endpoints named in a piece of text. Bounded, and never returns a secret from a URL. */

@@ -4,7 +4,20 @@
   "description": "Scan a repo before you open it: auto-run files, install scripts, malicious packages and leaked secrets.",
   "version": "0.1.0",
   "publisher": "stack3",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yashjain197/stack3security.git",
+    "directory": "vs-extension"
+  },
+  "keywords": [
+    "security",
+    "web3",
+    "supply chain",
+    "npm",
+    "malware",
+    "workspace trust"
+  ],
   "private": true,
   "engines": {
     "vscode": "^1.90.0"
@@ -115,7 +128,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:integration": "node test/integration/run.mjs && node test/integration/run.mjs webview-xss && node test/integration/run.mjs open-canary",
-    "test:ollama": "node test/integration/ollama.mjs"
+    "test:ollama": "node test/integration/ollama.mjs",
+    "coverage": "vitest run --coverage",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "check:regexes": "node scripts/check-regexes.mjs",
+    "package": "npm run build && node scripts/check-bundle.mjs && vsce package --no-dependencies",
+    "ci": "npm run lint && npm run typecheck && npm run coverage && npm run check:regexes && npm run build && npm run check:bundle"
   },
   "dependencies": {
     "jsonc-parser": "3.3.1",
@@ -123,9 +141,11 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@makenowjust-labo/recheck": "3.1.0",
     "@types/node": "22.20.5",
     "@types/vscode": "1.90.0",
     "@vitest/coverage-v8": "5.0.5",
+    "@vscode/vsce": "4.1.0",
     "esbuild": "0.28.2",
     "eslint": "10.13.0",
     "fast-check": "4.10.2",

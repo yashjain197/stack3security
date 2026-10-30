@@ -1,0 +1,39 @@
+Yes, but only for publishing to the VS Code Marketplace. It's free and takes about 10 minutes. You do it yourself, because it uses your Microsoft account.
+
+Steps
+
+1. Create an Azure DevOps organization
+- Go to dev.azure.com and sign in with a Microsoft account.
+- If it asks, create an organization (any name). This is only needed to issue the access token.
+
+2. Create a Personal Access Token (PAT)
+- Click the user-settings icon at the top right, then Personal access tokens → New Token.
+- Set Organization to All accessible organizations. If you pick one org, publishing fails with a confusing 401.
+- Set Scopes to Custom defined, then click Show all scopes, find Marketplace, and tick Manage.
+- Copy the token immediately, since it's shown only once.
+
+3. Create the publisher
+- Go to marketplace.visualstudio.com/manage and click Create publisher.
+- The ID must be unique, lowercase, and cannot be changed later. It must match "publisher" in package.json, which is currently stack3. If stack3 is taken, choose another ID and I'll update package.json.
+- Add a display name. The other fields are optional.
+
+4. Publish
+- Install the tool: npm install -g @vscode/vsce.
+- Log in: vsce login <publisher-id>, then paste the PAT.
+- Publish with vsce publish.
+- No PAT needed: you can also build with vsce package and upload the .vsix by hand on the manage page.
+
+Before the first publish
+
+- README: add a README.md, because the Marketplace page is built from it.
+- License and repository: add a LICENSE file, or confirm UNLICENSED is what you want. Also add a repository field.
+- Version: bump version on every publish. The Marketplace rejects a version it already has.
+- Review: new extensions are scanned automatically and can take a few minutes to appear.
+
+Notes
+
+- Keep the PAT secret. Don't paste it into this chat and don't commit it. Treat it like a password, and if it leaks, revoke it in Azure DevOps. It lets someone publish as you.
+- Open VSX: VSCodium, Cursor and similar editors use Open VSX (open-vsx.org). It needs a separate account, so it's optional for now.
+- Not needed for the demo: installing from a .vsix or pressing F5 needs none of this. I'd do the publisher setup after the extension works.
+
+When I reach Task 19 (packaging), I'll prepare the README, license and .vsix, and you do steps 1 to 3 on your side.

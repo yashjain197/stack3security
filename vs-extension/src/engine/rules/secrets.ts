@@ -91,11 +91,12 @@ function dotenv(file: VirtualFile, ctx: ScanContext): Finding[] {
   const names: string[] = [];
   let first = 0;
   for (const l of lines(file.text ?? '')) {
-    const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(l.text);
+    const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(l.text);
     if (!m) continue;
     const raw = (m[2] ?? '').trim();
     const quoted = /^(["'])(.*)\1/.exec(raw);
-    const value = quoted ? (quoted[2] ?? '') : raw.replace(/\s+#.*$/, '').trim();
+    const comment = raw.search(/\s#/); // a trailing ` # comment`; search, not a `\s+#.*$` replace, which is quadratic
+    const value = quoted ? (quoted[2] ?? '') : (comment < 0 ? raw : raw.slice(0, comment)).trim();
     if (PLACEHOLDER.test(value)) continue;
     if (SECRET_NAME.test(m[1] ?? '') || CREDENTIAL_URL.test(value)) {
       names.push(m[1] ?? '');
