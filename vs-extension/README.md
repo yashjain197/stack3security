@@ -70,3 +70,7 @@ All settings are user-level: a repository cannot change them, and they are disab
 
 `code --install-extension stack3-vscode-0.1.0.vsix` (Cursor: `cursor --install-extension …`). Check the file against
 the published SHA-256 first.
+
+## Licence
+
+MIT, see `LICENSE`. A scan reports known patterns only; it is not a guarantee that code is safe to run.

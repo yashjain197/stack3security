@@ -107,11 +107,11 @@ This file is kept separate from [`ARCHITECTURE.md`](./ARCHITECTURE.md). Each ent
 - **Evidence:** the `.vsix` installs in VS Code 1.142.0 and Cursor 3.18.9 on a fresh `--user-data-dir`/`--extensions-dir`; the integration suite runs in 1.142.0. It has not been run on 1.90 itself.
 - **Not covered:** behaviour on VS Code 1.90 to 1.141, which is assumed from the API levels and not tested.
 
-### D-13: Licence text (placeholder, needs the team's decision)
-- **Status:** Proposed, 2026-10-30
-- **Decision:** `LICENSE` says "All rights reserved" for evaluation at Hacker House Goa 2026, and `package.json` points at it (`SEE LICENSE IN LICENSE`). `private` stays `true`, which blocks `vsce publish` but not `vsce package`.
-- **Why:** Marketplace and `vsce` warn when a licence file is missing. Choosing an open licence, or a copyright holder's legal name, is the team's call, not mine.
-- **How to change:** replace `LICENSE`, set `license` to its SPDX id, and remove `"private": true` before the first `vsce publish`.
+### D-13: Licence is MIT, and publishing is enabled
+- **Status:** Accepted, 2026-10-30 (the owner chose MIT)
+- **Decision:** `LICENSE` is the MIT licence, copyright "The Stack3 Security team", and `package.json` says `"license": "MIT"`. `"private": true` is removed so `vsce publish` works. Publishing steps, scripts and the tag-driven workflow are in `PUBLISHING.md`.
+- **Why:** An open licence is needed for a public Marketplace listing, and MIT keeps the terms simple. The server-side scan notice ("known patterns only, not a guarantee") stays in the README.
+- **Still open:** the copyright holder's legal name; the Marketplace publisher ID `stack3` must be created by a person.
 
 ### D-14: ReDoS check and what it changed
 - **Status:** Accepted, 2026-10-30
