@@ -1,0 +1,25 @@
+{
+  "reason": "Public seed: Ledger Connect Kit supply-chain attack (December 2023, ledger.com and Blockaid) and domains from the MetaMask eth-phishing-detect blocklist",
+  "nodes": [
+    {"type": "package", "id": "pkg:npm/@ledgerhq/connect-kit@1.1.5", "risk": "critical", "category": "drainer"},
+    {"type": "package", "id": "pkg:npm/@ledgerhq/connect-kit@1.1.6", "risk": "critical", "category": "drainer"},
+    {"type": "package", "id": "pkg:npm/@ledgerhq/connect-kit@1.1.7", "risk": "critical", "category": "drainer"},
+    {"type": "wallet", "id": "1:0x658729879fca881d9526480b82ae00efc54b5c2d", "risk": "critical", "category": "drainer", "label": "Ledger Connect Kit collector"},
+    {"type": "wallet", "id": "1:0x412f10aad96fd78da6736387e2c84931ac20313f", "risk": "critical", "category": "drainer", "label": "Angel Drainer fee wallet"},
+    {"type": "wallet", "id": "1:0x000067464bdcbec51051ddcce8551e702f130000", "risk": "critical", "category": "drainer", "label": "Angel Drainer contract"},
+    {"type": "wallet", "id": "1:0x00003ffa7857408ab714c28b1451914330240000", "risk": "high", "category": "drainer", "label": "Angel Drainer operator"},
+    {"type": "endpoint", "id": "https://cdn.jsdelivr.net/npm/2e6d5f64604be31/2e6d5f64604be31.js", "risk": "critical", "category": "malware"},
+    {"type": "repo", "id": "github:LedgerHQ/connect-kit", "risk": "unknown", "category": "supply-chain"},
+    {"type": "domain", "id": "metamaskaku.azurewebsites.net", "risk": "critical", "category": "phishing", "impersonates": "metamask"},
+    {"type": "domain", "id": "ldegerwallet.azurewebsites.net", "risk": "critical", "category": "phishing", "impersonates": "ledger"},
+    {"type": "domain", "id": "v3-trezorsuite.com", "risk": "critical", "category": "phishing", "impersonates": "trezor"}
+  ],
+  "edges": [
+    {"type": "package_drains_to", "fromId": "pkg:npm/@ledgerhq/connect-kit@1.1.5", "toId": "1:0x658729879fca881d9526480b82ae00efc54b5c2d"},
+    {"type": "package_drains_to", "fromId": "pkg:npm/@ledgerhq/connect-kit@1.1.6", "toId": "1:0x658729879fca881d9526480b82ae00efc54b5c2d"},
+    {"type": "package_drains_to", "fromId": "pkg:npm/@ledgerhq/connect-kit@1.1.7", "toId": "1:0x658729879fca881d9526480b82ae00efc54b5c2d"},
+    {"type": "package_drains_to", "fromId": "pkg:npm/@ledgerhq/connect-kit@1.1.7", "toId": "1:0x412f10aad96fd78da6736387e2c84931ac20313f"},
+    {"type": "package_sends_to", "fromId": "pkg:npm/@ledgerhq/connect-kit@1.1.6", "toId": "https://cdn.jsdelivr.net/npm/2e6d5f64604be31/2e6d5f64604be31.js"},
+    {"type": "package_sends_to", "fromId": "pkg:npm/@ledgerhq/connect-kit@1.1.7", "toId": "https://cdn.jsdelivr.net/npm/2e6d5f64604be31/2e6d5f64604be31.js"}
+  ]
+}
