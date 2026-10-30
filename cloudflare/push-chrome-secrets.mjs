@@ -48,6 +48,9 @@ if (web) {
   values.COOKIE_SECURE = "true";
   values.COOKIE_SAMESITE = "none";
 }
+if (!values.REPO_SCAN_URL) {
+  values.REPO_SCAN_URL = "https://vs-ext-backend.stack3security.workers.dev";
+}
 
 const file = join(tmpdir(), `stack3-chrome-secrets-${process.pid}.json`);
 writeFileSync(file, JSON.stringify(values), { mode: 0o600 });

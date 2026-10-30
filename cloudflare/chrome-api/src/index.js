@@ -45,6 +45,7 @@ const PASSTHROUGH = [
   "RPC_URL_ETHEREUM",
   "SOCKET_API_KEY",
   "RDAP_REMOTE",
+  "REPO_SCAN_URL",
 ];
 
 export class ApiContainer extends Container {
