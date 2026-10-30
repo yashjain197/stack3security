@@ -65,7 +65,7 @@ def _set_refresh_cookie(response: Response, issued: IssuedTokens) -> None:
         path=settings.refresh_cookie_path,
         secure=settings.cookie_secure,
         httponly=True,
-        samesite="strict",
+        samesite=settings.cookie_samesite,
     )
 
 
@@ -77,7 +77,7 @@ def _clear_refresh_cookie(response: Response) -> None:
         path=settings.refresh_cookie_path,
         secure=settings.cookie_secure,
         httponly=True,
-        samesite="strict",
+        samesite=settings.cookie_samesite,
     )
 
 

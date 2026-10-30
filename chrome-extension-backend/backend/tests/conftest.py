@@ -23,6 +23,10 @@ os.environ["TIGERGRAPH_HOST"] = ""
 os.environ["TIGERGRAPH_SECRET"] = ""
 os.environ["TIGERGRAPH_PASSWORD"] = ""
 os.environ["TIGERGRAPH_API_KEY"] = ""
+os.environ["ETHERSCAN_API_KEY"] = ""
+os.environ["RPC_URL_ETHEREUM"] = ""
+os.environ["SOCKET_API_KEY"] = ""
+os.environ["RULES_REMOTE"] = "false"
 
 import subprocess
 import sys
@@ -37,6 +41,8 @@ from app.core.rate_limit import init_rate_limiter
 from app.db.session import dispose_engine, get_session_factory
 from app.main import app
 from app.modules.billing.service import sync_product_ids
+from app.modules.protection.blocklist import reset_blocklist
+from app.modules.protection.chain import reset_chain_cache
 
 WEB_ORIGIN = "http://localhost:3000"
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -80,6 +86,8 @@ async def clean_state() -> AsyncIterator[None]:
         await session.commit()
         await sync_product_ids(session)
     init_rate_limiter(None)
+    reset_blocklist()
+    reset_chain_cache()
     yield
     await dispose_engine()
 
