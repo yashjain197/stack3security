@@ -16,6 +16,16 @@ describe('secret.evm-key', () => {
   test('a 64-hex value with no key context (a tx hash) is not a key', () => {
     expect(ids([vf('src/a.js', `const txHash = "0x${KEY}";`)])).toEqual([]);
   });
+  // Rehearsal 3: OpenZeppelin and Safe declare `bytes32 private constant ... = 0x...` typehashes and storage slots.
+  test('regression: the "private" visibility keyword on a constant is not a key context', () => {
+    expect(ids([vf('contracts/Safe.sol', `bytes32 private constant DOMAIN_SEPARATOR_TYPEHASH = 0x${KEY};`)])).toEqual([]);
+    expect(ids([vf('src/a.ts', `private readonly slot = '0x${KEY}';`)])).toEqual([]);
+  });
+  test('but "private key" in any spelling still is', () => {
+    for (const l of [`const privateKey = '0x${KEY}';`, `private_key: ${KEY}`, `// my private key is 0x${KEY}`, `bytes32 private constant SECRET = 0x${KEY};`]) {
+      expect(ids([vf('src/a.sol', l)]), l).toEqual(['secret.evm-key']);
+    }
+  });
   test('longer hex runs (public keys, hashes) are not a 64-hex key', () => {
     expect(ids([vf('src/a.js', `privateKey = "${KEY}${KEY}"`)])).toEqual([]);
   });

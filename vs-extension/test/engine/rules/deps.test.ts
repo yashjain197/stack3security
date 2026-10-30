@@ -66,6 +66,16 @@ describe('lockfile rules', () => {
     expect(ids([npmLock({ 'node_modules/a': reg('a', { resolved: 'https://evil.example/registry.npmjs.org/a.tgz' }) })])).toEqual(['deps.foreign-registry:high']);
     expect(ids([npmLock({ 'node_modules/a': reg('a', { resolved: 'https://registry.npmjs.org@evil.example/a.tgz' }) })])).toEqual(['deps.foreign-registry:high']);
   });
+  // Rehearsal 3: hardhat's pnpm-lock.yaml locks `foundry-rs/forge-std#v1.17.0` as a codeload.github.com tarball.
+  test('regression: a GitHub dependency downloaded from codeload.github.com is unverified-source (caution), not a foreign registry', () => {
+    const l = npmLock({ 'node_modules/forge-std': reg('forge-std', { resolved: 'https://codeload.github.com/foundry-rs/forge-std/tar.gz/abc123', integrity: undefined }) });
+    expect(ids([l])).toEqual(['deps.unverified-source:caution']);
+  });
+  test('and a look-alike of that host is still a foreign registry', () => {
+    for (const u of ['https://codeload.github.com.evil.example/a.tgz', 'https://codeload.github.com@evil.example/a.tgz', 'https://evil.example/codeload.github.com/a.tgz']) {
+      expect(ids([npmLock({ 'node_modules/a': reg('a', { resolved: u }) })]), u).toEqual(['deps.foreign-registry:high']);
+    }
+  });
   test('git and file entries in a lockfile → unverified-source, not foreign-registry', () => {
     const l = npmLock({
       'node_modules/g': { version: '1.0.0', resolved: 'git+ssh://git@github.com/x/g.git#abc' },

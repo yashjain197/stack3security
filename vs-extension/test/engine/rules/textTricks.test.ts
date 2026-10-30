@@ -7,10 +7,21 @@ const ids = (files: ReturnType<typeof vf>[]) => run(files).map((f) => `${f.ruleI
 
 describe('text.long-line', () => {
   const long = 'const a = 1;' + ' '.repeat(3) + 'x'.repeat(2100);
-  test('>2000 chars in a script → high, with the line', () => {
-    const [f] = run([vf('scripts/setup.js', `ok\n${long}`)]);
+  test('>2000 chars in a script that runs code on that line → high, with the line', () => {
+    const [f] = run([vf('scripts/setup.js', `ok\n${long} eval(atob(x))`)]);
     expect(`${f?.ruleId}:${f?.severity}`).toBe('text.long-line:high');
     expect(f?.location).toEqual({ file: 'scripts/setup.js', line: 2 });
+    expect(f?.evidence).toContain('runs code');
+  });
+  // Rehearsal 3: ethers (word lists), wagmi and hardhat (embedded bytecode, test vectors) are long lines of plain data.
+  test('regression: >2000 chars of plain data in a source file → caution, not high', () => {
+    const [f] = run([vf('src.ts/wordlists/lang-en.ts', `export const words = "${'abandon ability able about '.repeat(120)}";`)]);
+    expect(`${f?.ruleId}:${f?.severity}`).toBe('text.long-line:caution');
+    expect(ids([vf('test/helpers/bytecode.ts', `export const code = '0x${'60806040'.repeat(400)}';`)])).toEqual(['text.long-line:caution']);
+  });
+  test('a long line of data in a shell script or yaml file is still high (not a data file type)', () => {
+    expect(ids([vf('setup.sh', long)])).toEqual(['text.long-line:high']);
+    expect(ids([vf('ci.yml', long)])).toEqual(['text.long-line:high']);
   });
   test('>2000 chars in a config file → high', () => expect(ids([vf('.vscode/tasks.json', long)])).toEqual(['text.long-line:high']));
   test('exactly 2000 chars → nothing', () => expect(ids([vf('a.js', 'x'.repeat(2000))])).toEqual([]));

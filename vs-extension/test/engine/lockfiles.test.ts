@@ -58,6 +58,16 @@ describe('parsers', () => {
     expect(src(es, 'local')).toBe('file');
     expect(es.find((e) => e.name === 'semver')).toMatchObject({ version: '7.6.0', integrity: 'sha512-ccc' });
   });
+  // Rehearsal 3: vite and hardhat commit a pnpm-lock.yaml with several documents (`---`), which used to read as "Could not read".
+  test('regression: pnpm lockfile with several YAML documents reads the packages of all of them', () => {
+    const multi = "---\nlockfileVersion: '9.0'\n\nsettings:\n  autoInstallPeers: false\n\n---\n" + golden('pnpm-v9.yaml');
+    const es = parsePnpm(multi);
+    expect(names(es)).toEqual(['@types/node', 'local', 'lodash', 'semver']);
+    expect(collectPurls([vf('package.json', JSON.stringify({ name: 'x', dependencies: { lodash: '4.17.21' } })), vf('pnpm-lock.yaml', multi)]).notChecked).toEqual([]);
+  });
+  test('a pnpm lockfile with an absurd number of documents is refused, not parsed', () => {
+    expect(() => parsePnpm(Array.from({ length: 10 }, () => 'lockfileVersion: 9').join('\n---\n'))).toThrow();
+  });
   test('pnpm v5 and v6 key shapes', () => {
     const v5 = parsePnpm("lockfileVersion: 5.4\npackages:\n  /lodash/4.17.21:\n    resolution: {integrity: sha512-b}\n  /@types/node/22.20.5_peer@1.0.0:\n    resolution: {integrity: sha512-a}\n");
     const v6 = parsePnpm("lockfileVersion: '6.0'\npackages:\n  /lodash@4.17.21:\n    resolution: {integrity: sha512-b}\n  /@types/node@22.20.5(peer@1.0.0):\n    resolution: {integrity: sha512-a}\n");
@@ -65,7 +75,9 @@ describe('parsers', () => {
   });
   test('pnpm: git and tarball resolutions', () => {
     const es = parsePnpm("lockfileVersion: '9.0'\npackages:\n  g@https://codeload.github.com/x/g/tar.gz/abc:\n    resolution: {tarball: 'https://codeload.github.com/x/g/tar.gz/abc'}\n  h@1.0.0:\n    resolution: {type: git, repo: 'https://github.com/x/h.git', commit: abc}\n");
-    expect([src(es, 'g'), src(es, 'h')]).toEqual(['http', 'git']);
+    // A GitHub tarball is a git dependency (unverified-source, caution), not "another registry" (high): hardhat's lockfile has two.
+    expect([src(es, 'g'), src(es, 'h')]).toEqual(['git', 'git']);
+    expect(src(parsePnpm("lockfileVersion: '9.0'\npackages:\n  t@1.0.0:\n    resolution: {tarball: 'https://cdn.example/t.tgz'}\n"), 't')).toBe('http');
   });
   test('bun.lock (JSONC with trailing commas)', () => {
     const es = parseBun(golden('bun.lock'));

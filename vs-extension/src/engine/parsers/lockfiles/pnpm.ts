@@ -1,10 +1,31 @@
-import { parse as parseYaml } from 'yaml';
+import { parseAllDocuments } from 'yaml';
 import { asString, classifyProtocol, classifySpec, isRecord, type LockEntry, type Source } from './types';
 
-/** pnpm-lock.yaml v5 to v9. Throws on invalid YAML or an alias bomb. */
+const MAX_DOCUMENTS = 4;
+
+/**
+ * Newer pnpm writes more than one YAML document into the file (a first one for its own tooling, then the project's), so
+ * every document is read and the `packages` of all of them are used. Throws on invalid YAML, an alias bomb or too many documents.
+ */
+function readDocuments(text: string): Record<string, unknown> {
+  const docs = parseAllDocuments(text);
+  if (docs.length === 0 || docs.length > MAX_DOCUMENTS) throw new Error('not a lockfile');
+  const merged: Record<string, unknown> = {};
+  const packages: Record<string, unknown> = {};
+  for (const d of docs) {
+    if (d.errors.length > 0) throw d.errors[0];
+    const js: unknown = d.toJS({ maxAliasCount: 50 });
+    if (!isRecord(js)) throw new Error('not a lockfile');
+    if (isRecord(js.packages)) Object.assign(packages, js.packages);
+    for (const [k, v] of Object.entries(js)) if (k !== 'packages' && !(k in merged)) merged[k] = v;
+  }
+  merged.packages = packages;
+  return merged;
+}
+
+/** pnpm-lock.yaml v5 to v9, including the multi-document form. Throws on invalid YAML or an alias bomb. */
 export function parsePnpm(text: string): LockEntry[] {
-  const doc: unknown = parseYaml(text, { maxAliasCount: 50 });
-  if (!isRecord(doc)) throw new Error('not a lockfile');
+  const doc = readDocuments(text);
   if (!isRecord(doc.packages)) return [];
   const legacy = Number.parseFloat(String(doc.lockfileVersion ?? '9')) < 6; // v5 keys are /name/1.2.3, later ones name@1.2.3
 
