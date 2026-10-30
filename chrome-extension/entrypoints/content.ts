@@ -1,11 +1,28 @@
 // Content script: counts facts about the page and reports them to the background worker.
 // It never sends the page HTML, anything the user typed, or a recovery phrase.
+// When the background flags the page as phishing, it shows the Stack3 warning here.
 
-import type { PageCapture, PageSignals } from "../utils/types";
+import { showPageAlert } from "../utils/overlay";
+import { BRAND_NAMES } from "../utils/phishing";
+import type { PageCapture, PageSignals, TabMessage } from "../utils/types";
 
 const SEED_WORDS = /seed|recovery|mnemonic|secret\s*phrase/i;
 const PRIVATE_KEY = /private\s*key/i;
-const BRANDS = ["MetaMask", "Ledger", "Trezor", "Uniswap", "Coinbase", "Phantom", "Trust Wallet", "Rabby"];
+
+/** A fixed element covering most of the viewport, as fake wallet pop-ups use. */
+function hasFullscreenOverlay(): boolean {
+  const area = window.innerWidth * window.innerHeight;
+  if (!area) return false;
+  // Only elements under the viewport centre can cover it; this avoids styling every node.
+  for (const element of document.elementsFromPoint(window.innerWidth / 2, window.innerHeight / 2)) {
+    if (element.tagName === "STACK3-SECURITY-UI" || element === document.body || element === document.documentElement) continue;
+    const style = getComputedStyle(element);
+    if (style.position !== "fixed" || style.display === "none" || style.visibility === "hidden") continue;
+    const rect = element.getBoundingClientRect();
+    if ((rect.width * rect.height) / area >= 0.9 && Number(style.zIndex) >= 1000) return true;
+  }
+  return false;
+}
 
 function attributeText(element: Element): string {
   return [
@@ -55,7 +72,7 @@ function collectSignals(): PageSignals {
   }
 
   const title = document.title ?? "";
-  const brandInTitle = BRANDS.find((brand) =>
+  const brandInTitle = BRAND_NAMES.find((brand) =>
     title.toLowerCase().includes(brand.toLowerCase()),
   ) ?? null;
 
@@ -83,7 +100,7 @@ function collectSignals(): PageSignals {
     brandInTitle,
     hiddenIframe,
     clipboardRead: false,
-    fullscreenOverlay: false,
+    fullscreenOverlay: hasFullscreenOverlay(),
   };
 }
 
@@ -121,6 +138,13 @@ export default defineContentScript({
         // The background worker may be restarting; the next capture retries.
       });
     };
+
+    browser.runtime.onMessage.addListener((message: TabMessage) => {
+      if (message?.type !== "page-alert" || message.alert.origin !== location.origin) return;
+      showPageAlert(message.alert, () => {
+        browser.runtime.sendMessage({ type: "dismiss-page-alert", origin: location.origin }).catch(() => {});
+      });
+    });
 
     send();
     // Re-capture when the page changes meaningfully, at most once per 2 seconds.

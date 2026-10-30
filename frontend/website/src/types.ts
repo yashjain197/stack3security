@@ -1,61 +1,50 @@
 export type Verdict = "critical" | "high" | "caution" | "unknown" | "no_known_issues";
 
+// One reason behind a verdict, exactly as the Stack3 API returns it.
 export type Finding = {
-  layer: "package" | "repository" | "website" | "transaction" | "contract";
+  layer: string;
   severity: Verdict;
   title: string;
   evidence: string;
-  location?: string;
-  source?: string;
-  recommendation?: string;
+  location?: { file?: string | null; line?: number | null } | null;
+  source: string;
+  checkedAt: string;
 };
 
-export type ScanResult = {
+// The API's answer to every check (website, contract, transaction).
+export type ScanVerdict = {
   level: Verdict;
-  target: {
-    type: string;
-    id: string;
-  };
+  target: { type: "repo" | "package" | "site" | "contract" | "tx"; id: string };
   findings: Finding[];
-  explanation: string;
+  indicators: { addresses: string[]; domains: string[] };
   notChecked: string[];
-  actions?: string[];
+  actions: string[];
+  explanation?: string | null;
 };
 
-export type TransactionResult = {
-  level: Verdict;
-  websiteAction: string;
-  network: string;
-  method: string;
-  targetAddress: string;
-  tokenAddress: string;
-  spenderAddress: string;
-  allowance: string;
-  findings: Finding[];
-  notChecked: string[];
-};
+export type ScanKind = "website" | "contract" | "transaction";
 
-export type ContractResult = {
+// A completed live scan, kept in this browser's scan history.
+export type ScanRecord = {
+  id: string;
+  kind: ScanKind;
   target: string;
-  network: string;
-  sourceVerification: string;
-  proxyStatus: string;
-  ownerPermissions: string;
-  deploymentAge: string;
-  verdict: Verdict;
-  explanation: string;
-  notChecked: string[];
+  chainId?: number;
+  createdAt: string;
+  verdict: ScanVerdict;
 };
 
-export type Report = {
-  target: string;
-  type: string;
-  verdict: Verdict;
-  findings: number;
-  date: string;
-  detail: string;
-  findingDetails: Finding[];
-  notChecked: string[];
+// What a wallet is about to sign, in the shape POST /v1/review-tx expects.
+export type TxReviewRequest = {
+  chainId: number;
+  method: "eth_sendTransaction" | "personal_sign" | "eth_signTypedData_v4";
+  origin?: string;
+  from?: string;
+  to?: string;
+  value?: string;
+  data?: string;
+  message?: string;
+  typedData?: Record<string, unknown>;
 };
 
 export type User = {

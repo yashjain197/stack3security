@@ -7,13 +7,27 @@ import type {
   LinkStart,
   PageSignals,
   RulesBundle,
+  SourcifyInfo,
   TokenPair,
   TxReview,
   Verdict,
 } from "./types";
 
-export const DEFAULT_API_BASE_URL = "https://stack3security.onrender.com";
-export const WEBSITE_URL = "http://localhost:3000";
+export const DEFAULT_API_BASE_URL = "https://chrome-ext-backend.stack3security.workers.dev";
+export const WEBSITE_URL = "https://stack3security.stack3security.workers.dev";
+
+/** Website page that runs the full live contract scan for a contract on a chain. */
+export function contractDetailsUrl(chainId: number, address: string | null): string {
+  return address
+    ? `${WEBSITE_URL}/dashboard/contracts?chain=${chainId}&address=${address.toLowerCase()}`
+    : `${WEBSITE_URL}/dashboard/transactions`;
+}
+
+/** Website page that runs the live domain scan for a host. */
+export const siteDetailsUrl = (host: string) => `${WEBSITE_URL}/dashboard/scanner?domain=${encodeURIComponent(host)}`;
+
+// Base URLs from old deployments; a stored override matching one is discarded.
+const LEGACY_API_BASE_URLS = new Set(["https://stack3security.onrender.com"]);
 
 export class ApiError extends Error {
   status: number;
@@ -44,6 +58,15 @@ export async function getApiBaseUrl(): Promise<string> {
   const stored = await browser.storage.local.get("apiBaseUrl");
   const value = stored.apiBaseUrl;
   return typeof value === "string" && value ? value.replace(/\/$/, "") : DEFAULT_API_BASE_URL;
+}
+
+/** Drops a stored API base URL that still points at a retired deployment. */
+export async function clearLegacyApiBaseUrl(): Promise<void> {
+  const stored = await browser.storage.local.get("apiBaseUrl");
+  const value = stored.apiBaseUrl;
+  if (typeof value === "string" && LEGACY_API_BASE_URLS.has(value.replace(/\/$/, ""))) {
+    await browser.storage.local.remove("apiBaseUrl");
+  }
 }
 
 async function getStoredAuth(): Promise<StoredAuth | null> {
@@ -200,15 +223,23 @@ export async function getRulesBundle(force = false): Promise<RulesBundle> {
   return bundle;
 }
 
+// Pages are checked against the cached blocklist; it is revalidated at most once per 30 minutes.
+const BLOCKLIST_FRESH_MS = 30 * 60 * 1000;
+
 export async function getBlocklist(): Promise<Blocklist> {
   const stored = await browser.storage.local.get(BLOCKLIST_KEY);
-  const cached = stored[BLOCKLIST_KEY] as { list: Blocklist; etag: string } | undefined;
+  const cached = stored[BLOCKLIST_KEY] as { list: Blocklist; etag: string; checkedAt?: number } | undefined;
+  if (cached?.checkedAt && Date.now() - cached.checkedAt < BLOCKLIST_FRESH_MS) return cached.list;
   const headers: Record<string, string> = {};
   if (cached) headers["If-None-Match"] = cached.etag;
   const fresh = await authedRequest<Blocklist | null>("/v1/rules/blocklist", { headers });
-  if (fresh === null && cached) return cached.list; // 304: our copy is still good
+  if (fresh === null && cached) {
+    // 304: our copy is still good
+    await browser.storage.local.set({ [BLOCKLIST_KEY]: { ...cached, checkedAt: Date.now() } });
+    return cached.list;
+  }
   if (fresh === null) throw new ApiError("Blocklist unavailable.", 0, "invalid_response");
-  await browser.storage.local.set({ [BLOCKLIST_KEY]: { list: fresh, etag: fresh.version } });
+  await browser.storage.local.set({ [BLOCKLIST_KEY]: { list: fresh, etag: fresh.version, checkedAt: Date.now() } });
   return fresh;
 }
 
@@ -245,6 +276,28 @@ export function scanContract(chainId: number, address: string): Promise<Verdict>
   return authedRequest<Verdict>(
     `/v1/scan-contract/${encodeURIComponent(chainId)}/${encodeURIComponent(address)}`,
   );
+}
+
+// ---------- Public contract metadata (no account needed) ----------
+
+/** Verification status and contract name from Sourcify. Null when Sourcify cannot be reached. */
+export async function lookupSourcify(chainId: number, address: string): Promise<SourcifyInfo | null> {
+  try {
+    const response = await fetch(
+      `https://sourcify.dev/server/v2/contract/${encodeURIComponent(chainId)}/${encodeURIComponent(address)}?fields=compilation`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000) },
+    );
+    if (response.status === 404) return { verified: false, name: null, match: null };
+    if (!response.ok) return null;
+    const data = (await response.json()) as { match?: string | null; compilation?: { name?: string } };
+    return {
+      verified: Boolean(data.match),
+      name: typeof data.compilation?.name === "string" ? data.compilation.name : null,
+      match: data.match ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export const levelLabels: Record<Level, string> = {

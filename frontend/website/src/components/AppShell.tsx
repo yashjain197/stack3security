@@ -25,12 +25,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const activePath = pathname.replace(/\/+$/, "") || "/";
   const email = user?.email;
-  const initial = email?.charAt(0).toUpperCase() ?? "D";
-  const mode = activePath === "/dashboard/graph"
-    ? "LIVE DATA"
-    : activePath.startsWith("/dashboard") && activePath !== "/dashboard/settings"
-      ? "DEMO SCANS"
-      : "LIVE ACCOUNT";
+  const initial = email?.charAt(0).toUpperCase() ?? "S";
+  const mode = activePath.startsWith("/dashboard") && activePath !== "/dashboard/settings" ? "LIVE DATA" : "LIVE ACCOUNT";
 
   async function signOut() {
     try {
@@ -55,7 +51,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Icon name={item.icon} />
               <span>{item.label}</span>
-              {item.path === "/dashboard/scanner" ? <span className="side-pill">DEMO</span> : null}
             </Link>
           ))}
         </nav>
@@ -74,8 +69,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <span className="avatar">{initial}</span>
             <span className="user-info">
-              <strong>{email ?? "Demo workspace"}</strong>
-              <small>{email ? "Signed in" : "Demo mode"}</small>
+              <strong>{email ?? "Your workspace"}</strong>
+              <small>{email ? "Signed in" : "Not signed in"}</small>
             </span>
             <span className="profile-more">···</span>
           </button>
@@ -107,7 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="dashboard-content">{children}</main>
         <footer className="app-footer">
-          <span>Stack3 Security · Scanning results are illustrative</span>
+          <span>Stack3 Security · Live scans from the Stack3 API</span>
           <span>Risk indicators, not a guarantee of safety.</span>
         </footer>
       </div>
