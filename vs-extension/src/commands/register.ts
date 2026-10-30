@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { createClient } from '../api/client';
+import { isPlausibleSocketKey, withSocket } from '../api/socketClient';
+import { getSocketKey, SET_SOCKET_KEY, SOCKET_KEY_SECRET } from '../config/socketKey';
 import { getSettings } from '../config/settings';
 import { cloneRepo } from '../quarantine/git';
 import { createQuarantineDir, validateRepoUrl } from '../quarantine/paths';
@@ -9,7 +11,7 @@ import { runScan } from '../scan/scheduler';
 import { NOTICE } from '../ui/copy';
 import { postExplanation, showVerdictPanel } from '../ui/panel';
 import { apiProvider } from '../ai/provider';
-import { createOllamaProvider } from '../ai/ollama';
+import { createClaudeProvider, isPlausibleClaudeKey } from '../ai/claude';
 import { explainRecord } from '../ai/explain';
 import { parseQuarantinePath, quarantineUriPath, readQuarantined, SCHEME } from '../ui/quarantineFs';
 import { buildReport } from '../ui/view';
@@ -23,6 +25,8 @@ import { cloneAndScan, rescanRecord, type CloneAndScanDeps } from './cloneAndSca
 import { createActionHandlers } from './actions';
 
 export const CLONE_AND_SCAN = 'stack3.cloneAndScan';
+export const SET_CLAUDE_KEY = 'stack3.setClaudeApiKey';
+const CLAUDE_KEY_SECRET = 'stack3.claudeApiKey';
 
 /** What the command returns to whoever ran it (`executeCommand`): an outcome only, never paths or findings. */
 export interface CommandOutcome {
@@ -57,11 +61,14 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     const settings = getSettings();
     return {
       settings,
-      client: createClient({
-        baseUrl: settings.apiUrl,
-        allowLocalhost: settings.allowLocalhost,
-        clientVersion: String((context.extension.packageJSON as { version?: string }).version ?? ''),
-      }),
+      client: withSocket(
+        createClient({
+          baseUrl: settings.apiUrl,
+          allowLocalhost: settings.allowLocalhost,
+          clientVersion: String((context.extension.packageJSON as { version?: string }).version ?? ''),
+        }),
+        { apiKey: () => getSocketKey(context) },
+      ),
       scan: (dir: string) => runScan(dir, { mode: 'clone', checkedAt: new Date().toISOString() }, settings.limits),
       report,
     };
@@ -74,7 +81,12 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     void explainRecord(rec, {
       settings: getSettings,
       providers: {
-        ollama: (model) => createOllamaProvider({ model }),
+        // The key lives in VS Code's secret storage (the OS keychain). CLAUDE_API_KEY / ANTHROPIC_API_KEY in the
+        // environment of the editor are the fallback, which is also how a key in .env reaches a development host.
+        claude: () =>
+          createClaudeProvider({
+            apiKey: async () => (await context.secrets.get(CLAUDE_KEY_SECRET)) ?? process.env.CLAUDE_API_KEY ?? process.env.ANTHROPIC_API_KEY,
+          }),
         api: () => apiProvider(scanDeps().client),
       },
       post: postExplanation,
@@ -116,6 +128,46 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     info: (m) => void vscode.window.showInformationMessage(`Stack3: ${m}`),
     error: (m) => void vscode.window.showErrorMessage(`Stack3: ${m}`),
   });
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(SET_CLAUDE_KEY, async (): Promise<void> => {
+      const key = await vscode.window.showInputBox({
+        title: 'Stack3: Set Claude API key',
+        prompt: 'Used to ask Claude Haiku for a plain-English explanation of a verdict. Stored in your OS keychain. Leave empty to remove it.',
+        password: true,
+        ignoreFocusOut: true,
+        validateInput: (v) => (v.trim() === '' || isPlausibleClaudeKey(v.trim()) ? undefined : 'That does not look like an API key.'),
+      });
+      if (key === undefined) return;
+      if (key.trim() === '') {
+        await context.secrets.delete(CLAUDE_KEY_SECRET);
+        void vscode.window.showInformationMessage('Stack3: Claude API key removed.');
+        return;
+      }
+      await context.secrets.store(CLAUDE_KEY_SECRET, key.trim());
+      void vscode.window.showInformationMessage('Stack3: Claude API key saved.');
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(SET_SOCKET_KEY, async (): Promise<void> => {
+      const key = await vscode.window.showInputBox({
+        title: 'Stack3: Set Socket API key',
+        prompt: 'Lets Stack3 check the packages in a repo with Socket.dev. Only package URLs are sent to api.socket.dev. Stored in your OS keychain. Leave empty to remove it.',
+        password: true,
+        ignoreFocusOut: true,
+        validateInput: (v) => (v.trim() === '' || isPlausibleSocketKey(v.trim()) ? undefined : 'That does not look like a Socket API key.'),
+      });
+      if (key === undefined) return;
+      if (key.trim() === '') {
+        await context.secrets.delete(SOCKET_KEY_SECRET);
+        void vscode.window.showInformationMessage('Stack3: Socket API key removed.');
+        return;
+      }
+      await context.secrets.store(SOCKET_KEY_SECRET, key.trim());
+      void vscode.window.showInformationMessage('Stack3: Socket API key saved.');
+    }),
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand(CLONE_AND_SCAN, async (arg?: unknown): Promise<CommandOutcome> => {

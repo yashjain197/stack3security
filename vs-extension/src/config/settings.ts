@@ -11,16 +11,12 @@ export interface Stack3Settings {
   allowLocalhost: boolean;
   explainMode: 'publicOnly' | 'always' | 'never';
   reportMode: 'publicAuto' | 'ask' | 'never';
-  /** Where the plain-English explanation comes from. `ollama` runs on this computer; `api` is the Stack3 server. */
-  explainProvider: 'ollama' | 'api';
-  ollamaModel: string;
+  /** Where the plain-English explanation comes from. `claude` asks Claude Haiku with the user's own key; `api` is the Stack3 server. */
+  explainProvider: 'claude' | 'api';
   limits: ScanLimits;
   /** Folder (absolute path) → paths to leave out of the guard scan of that folder. User level only. */
   scanExclude: Record<string, string[]>;
 }
-
-export const DEFAULT_OLLAMA_MODEL = 'qwen2.5-coder:7b';
-const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
 
 // Read only the user (global) value. A workspace or folder value comes from the
 // repo's own .vscode/settings.json, which is attacker-controlled (I-10).
@@ -63,8 +59,7 @@ export function getSettings(): Stack3Settings {
     allowLocalhost: userValue<unknown>(cfg, 'dev.allowLocalhost', false) === true,
     explainMode: oneOf(userValue<unknown>(cfg, 'explain.sendSnippets', 'publicOnly'), ['publicOnly', 'always', 'never'], 'publicOnly'),
     reportMode: oneOf(userValue<unknown>(cfg, 'report.mode', 'publicAuto'), ['publicAuto', 'ask', 'never'], 'publicAuto'),
-    explainProvider: oneOf(userValue<unknown>(cfg, 'explain.provider', 'ollama'), ['ollama', 'api'], 'ollama'),
-    ollamaModel: ((m) => (typeof m === 'string' && MODEL_NAME.test(m) ? m : DEFAULT_OLLAMA_MODEL))(userValue<unknown>(cfg, 'explain.ollamaModel', DEFAULT_OLLAMA_MODEL)),
+    explainProvider: oneOf(userValue<unknown>(cfg, 'explain.provider', 'claude'), ['claude', 'api'], 'claude'),
     limits: sanitizeLimits(userValue<unknown>(cfg, 'scan.limits', DEFAULT_LIMITS)),
     scanExclude: sanitizeExclude(userValue<unknown>(cfg, 'scan.exclude', {})),
   };

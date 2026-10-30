@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { PACKAGE_SCAN_UNAVAILABLE, buildVerdict } from '../api/merge';
-import type { Result, Stack3Client } from '../api/client';
+import type { PackageResult, Stack3Client } from '../api/client';
 import { clip } from '../engine/rules/evidence';
 import type { EngineResult, Finding, Indicators, Verdict } from '../engine/types';
 
@@ -85,7 +85,7 @@ export function registerWatchers(_ctx: Pick<vscode.ExtensionContext, 'subscripti
     st.unattributed = st.unattributed.filter((b) => [...b.purls].some((p) => current.has(p)));
 
     const fresh = [...current].filter((p) => !st.queried.has(p));
-    let remote: Result<Finding[]> = { ok: true, value: [] };
+    let remote: PackageResult = { ok: true, value: [] };
     if (fresh.length > 0) {
       remote = await deps.client().scanPackage(fresh);
       if (disposed || !states.has(root.path)) return;
@@ -105,7 +105,7 @@ export function registerWatchers(_ctx: Pick<vscode.ExtensionContext, 'subscripti
     const known = [...st.byPurl.values()].flat().concat(st.unattributed.flatMap((b) => b.findings));
     const failed = fresh.length > 0 && !remote.ok;
     const verdict = buildVerdict(
-      failed ? { ...local, notChecked: [...local.notChecked, PACKAGE_SCAN_UNAVAILABLE] } : local,
+      failed ? { ...local, notChecked: [...local.notChecked, ...(remote.notChecked ?? [PACKAGE_SCAN_UNAVAILABLE])] } : local,
       { ok: true, value: known },
       { type: 'repo', id: `workspace:${clip(root.name, 80)}` },
       NO_INDICATORS,

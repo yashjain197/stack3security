@@ -2,9 +2,14 @@
   "name": "stack3-vscode",
   "displayName": "Stack3 Security",
   "description": "Scan a repo before you open it: auto-run files, install scripts, malicious packages and leaked secrets.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "stack3",
   "license": "MIT",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1f2937",
+    "theme": "dark"
+  },
   "homepage": "https://github.com/yashjain197/stack3security/tree/main/vs-extension#readme",
   "bugs": {
     "url": "https://github.com/yashjain197/stack3security/issues"
@@ -42,7 +47,6 @@
       "restrictedConfigurations": [
         "stack3.apiUrl",
         "stack3.dev.allowLocalhost",
-        "stack3.explain.ollamaModel",
         "stack3.explain.provider",
         "stack3.explain.sendSnippets",
         "stack3.report.mode",
@@ -56,6 +60,14 @@
       {
         "command": "stack3.cloneAndScan",
         "title": "Stack3: Clone and scan safely"
+      },
+      {
+        "command": "stack3.setClaudeApiKey",
+        "title": "Stack3: Set Claude API key"
+      },
+      {
+        "command": "stack3.setSocketApiKey",
+        "title": "Stack3: Set Socket API key"
       }
     ],
     "configuration": {
@@ -73,21 +85,15 @@
           "scope": "application",
           "description": "Allow http://localhost as the API origin (development only)."
         },
-        "stack3.explain.ollamaModel": {
-          "type": "string",
-          "default": "qwen2.5-coder:7b",
-          "scope": "application",
-          "markdownDescription": "The Ollama model used when the provider is `ollama`. It must already be installed (`ollama pull <name>`)."
-        },
         "stack3.explain.provider": {
           "type": "string",
           "enum": [
-            "ollama",
+            "claude",
             "api"
           ],
-          "default": "ollama",
+          "default": "claude",
           "scope": "application",
-          "markdownDescription": "Where the plain-English explanation of a verdict comes from. `ollama` runs a model on this computer through Ollama, so nothing leaves it. `api` asks the Stack3 server. The explanation never changes the verdict."
+          "markdownDescription": "Where the plain-English explanation of a verdict comes from. `claude` asks Claude Haiku with your own API key (run *Stack3: Set Claude API key*); the redacted findings go to Anthropic. `api` asks the Stack3 server. The explanation never changes the verdict."
         },
         "stack3.explain.sendSnippets": {
           "type": "string",
@@ -144,12 +150,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:integration": "node test/integration/run.mjs && node test/integration/run.mjs webview-xss && node test/integration/run.mjs open-canary",
-    "test:ollama": "node test/integration/ollama.mjs",
+    "test:claude": "node test/integration/claude.mjs",
     "coverage": "vitest run --coverage",
     "check:bundle": "node scripts/check-bundle.mjs",
     "check:regexes": "node scripts/check-regexes.mjs",
-    "package": "npm run build && node scripts/check-bundle.mjs && vsce package --no-dependencies",
-    "publish:marketplace": "npm run build && node scripts/check-bundle.mjs && vsce publish --no-dependencies",
+    "warm-up": "node --env-file=.env scripts/warm-up.mjs",
+    "package": "npm run build && node scripts/check-bundle.mjs && vsce package --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/mdimran29/stack3-vscode-assets/main",
+    "publish:marketplace": "npm run build && node scripts/check-bundle.mjs && vsce publish --no-dependencies --baseImagesUrl https://raw.githubusercontent.com/mdimran29/stack3-vscode-assets/main",
     "publish:openvsx": "npm run build && node scripts/check-bundle.mjs && npx --yes ovsx@0.10.1 publish --no-dependencies",
     "ci": "npm run lint && npm run typecheck && npm run coverage && npm run check:regexes && npm run build && npm run check:bundle"
   },

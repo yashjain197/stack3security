@@ -1,9 +1,19 @@
 {
   // Press F5 with the vs-extension folder open. Run `npm run build` first (and again after changes).
+  // The first configuration is the real thing: package checks go to Socket with SOCKET_API_KEY from .env, and explanations
+  // go to Claude with CLAUDE_API_KEY from .env. Use the second one only for an offline demo with canned data.
   "version": "0.2.0",
   "configurations": [
     {
       "name": "Run Stack3 extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--disable-extensions"],
+      "envFile": "${workspaceFolder}/.env",
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"]
+    },
+    {
+      "name": "Run Stack3 extension (mock data, offline)",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--disable-extensions"],

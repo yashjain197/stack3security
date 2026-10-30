@@ -10,48 +10,49 @@ import { makeRec } from '../ui/helpers';
 const KEY = 'c4'.repeat(32);
 type Out = Result<{ explanation: string; fix: string }>;
 
-function setup(opts: { mode?: 'publicOnly' | 'always' | 'never'; provider?: 'ollama' | 'api'; answer?: Out | (() => Promise<Out>); localProvider?: boolean } = {}) {
+function setup(opts: { mode?: 'publicOnly' | 'always' | 'never'; provider?: 'claude' | 'api'; answer?: Out | (() => Promise<Out>) } = {}) {
   const posts: { scanId: string; msg: ExplanationMessage }[] = [];
   const seen: { level: Level; findings: unknown[] }[] = [];
-  const make = (isLocal: boolean): ExplainProvider => ({
-    isLocal,
+  const make = (): ExplainProvider => ({
     explain: vi.fn(async (level, findings) => {
       seen.push({ level, findings });
       const a = opts.answer ?? { ok: true as const, value: { explanation: 'It runs a script when the folder opens.', fix: 'Delete the clone.' } };
       return typeof a === 'function' ? a() : a;
     }),
   });
-  const ollama = make(true);
-  const api = make(false);
+  const claude = make();
+  const api = make();
   const deps: ExplainDeps = {
-    settings: () => ({ explainMode: opts.mode ?? 'publicOnly', explainProvider: opts.provider ?? 'ollama', ollamaModel: 'qwen2.5-coder:7b' }),
-    providers: { ollama: () => ollama, api: () => api },
+    settings: () => ({ explainMode: opts.mode ?? 'publicOnly', explainProvider: opts.provider ?? 'claude' }),
+    providers: { claude: () => claude, api: () => api },
     post: (scanId, msg) => void posts.push({ scanId, msg }),
   };
-  return { deps, posts, seen, ollama, api };
+  return { deps, posts, seen, claude, api };
 }
 const local = (level: Level = 'critical') => makeRec(level, { url: 'file:///home/me/private-project' });
 const publicRec = (level: Level = 'critical') => makeRec(level);
 
 describe('which provider, and whether to ask at all (D-5)', () => {
-  test('explainMode publicOnly + local folder + a provider that sends data to a server → no request', async () => {
-    const t = setup({ mode: 'publicOnly', provider: 'api' });
-    await explainRecord(local(), t.deps);
-    expect(t.api.explain).not.toHaveBeenCalled();
-    expect(t.posts).toEqual([]);
+  test('explainMode publicOnly + local folder → no request, whichever provider is chosen', async () => {
+    for (const provider of ['claude', 'api'] as const) {
+      const t = setup({ mode: 'publicOnly', provider });
+      await explainRecord(local(), t.deps);
+      expect(t[provider].explain).not.toHaveBeenCalled();
+      expect(t.posts).toEqual([]);
+    }
   });
   test('publicOnly + public clone + api → asks', async () => {
     const t = setup({ mode: 'publicOnly', provider: 'api' });
     await explainRecord(publicRec(), t.deps);
     expect(t.api.explain).toHaveBeenCalledOnce();
   });
-  test('publicOnly + local folder + the LOCAL model → asks, because nothing leaves the computer', async () => {
-    const t = setup({ mode: 'publicOnly', provider: 'ollama' });
-    await explainRecord(local(), t.deps);
-    expect(t.ollama.explain).toHaveBeenCalledOnce();
+  test('publicOnly + public clone + claude → asks', async () => {
+    const t = setup({ mode: 'publicOnly', provider: 'claude' });
+    await explainRecord(publicRec(), t.deps);
+    expect(t.claude.explain).toHaveBeenCalledOnce();
   });
   test('always asks for any folder; never asks for none, with either provider', async () => {
-    for (const provider of ['ollama', 'api'] as const) {
+    for (const provider of ['claude', 'api'] as const) {
       const yes = setup({ mode: 'always', provider });
       await explainRecord(local(), yes.deps);
       expect(yes[provider].explain).toHaveBeenCalledOnce();
@@ -64,13 +65,13 @@ describe('which provider, and whether to ask at all (D-5)', () => {
   test('the provider setting picks the provider', async () => {
     const a = setup({ provider: 'api' });
     await explainRecord(publicRec(), a.deps);
-    expect([a.api.explain, a.ollama.explain].map((x) => (x as ReturnType<typeof vi.fn>).mock.calls.length)).toEqual([1, 0]);
+    expect([a.api.explain, a.claude.explain].map((x) => (x as ReturnType<typeof vi.fn>).mock.calls.length)).toEqual([1, 0]);
   });
   test('nothing to explain (no findings) → no request, no placeholder', async () => {
     const t = setup();
     await explainRecord(makeRec('no_known_issues'), t.deps);
     await explainRecord(makeRec('unknown'), t.deps);
-    expect(t.ollama.explain).not.toHaveBeenCalled();
+    expect(t.claude.explain).not.toHaveBeenCalled();
     expect(t.posts).toEqual([]);
   });
 });
@@ -97,9 +98,9 @@ describe('what the panel is told', () => {
     expect(t.posts[1]!.msg).toEqual({ state: 'ready', explanation: 'It runs a script when the folder opens.', fix: 'Delete the clone.' });
   });
   test('a failure is shown as unavailable with the reason, not as an explanation', async () => {
-    const t = setup({ answer: { ok: false, reason: 'Ollama is not running. Start it with: ollama serve' } });
+    const t = setup({ answer: { ok: false, reason: 'No Claude API key is set.' } });
     await explainRecord(publicRec(), t.deps);
-    expect(t.posts.at(-1)!.msg).toEqual({ state: 'unavailable', reason: 'Ollama is not running. Start it with: ollama serve' });
+    expect(t.posts.at(-1)!.msg).toEqual({ state: 'unavailable', reason: 'No Claude API key is set.' });
   });
   test('a provider that throws is unavailable, not a crash', async () => {
     const t = setup({ answer: () => Promise.reject(new Error('boom')) });

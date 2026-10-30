@@ -1,8 +1,12 @@
+<p align="center"><img src="images/icon.png" alt="Stack3 shield logo" width="96" height="96"></p>
+
 # Stack3 Security for VS Code
 
 Check a repository **before** you open it. Fake-interview and "clone this task" attacks hide a command in
 `.vscode/tasks.json` that runs the moment a trusted folder opens. Stack3 clones the repo into a quarantine folder, reads
 it as data, and shows a verdict before anything can run.
+
+![Stack3 verdict for a repository with an auto-run task: critical, "Do not open this folder in VS Code."](images/verdict-critical.png)
 
 ## Use it
 
@@ -11,8 +15,18 @@ it as data, and shows a verdict before anything can run.
    - **critical**: Delete (main button), or Open with auto-run disabled.
    - **high**: Open with auto-run disabled (main button), Open, Delete.
    - lower levels: Open, Open with auto-run disabled, Delete.
-3. *Open with auto-run disabled* moves `.vscode/` and `.devcontainer/` out of the way into `.stack3-disabled/` first, so
+3. Optional, for a plain-English explanation under the verdict: run **Stack3: Set Claude API key** once. The explanation
+   is written by Claude Haiku and never changes the verdict; without a key the verdict simply shows no explanation.
+4. Optional, for package checks: run **Stack3: Set Socket API key** (see *Limits*).
+5. *Open with auto-run disabled* moves `.vscode/` and `.devcontainer/` out of the way into `.stack3-disabled/` first, so
    nothing in them can start.
+
+A repository with nothing to flag reads "No known issues found. This is not a guarantee.", never "safe":
+
+![Stack3 verdict with no known issues](images/verdict-no-known-issues.png)
+
+Both screenshots are the real verdict panel, rendered from the test fixtures `interview-task` and `router-comment`
+(the repository names in them are placeholders).
 
 While you work, Stack3 re-scans when `package.json`, a lockfile or a `.vscode` file changes, puts findings on the line
 in the editor and in the Problems panel, and warns before you commit a private key or seed phrase.
@@ -25,7 +39,7 @@ in the editor and in the Problems panel, and warns before you commit a private k
 | Install scripts (`preinstall`, `postinstall`, …), package-manager config, git config, hidden text | on your machine |
 | `eval`, base64-then-execute, `child_process`, raw-IP requests, reads of `.env` and key files | on your machine |
 | Private keys, seed phrases, API keys committed in the repo | on your machine |
-| Packages in the lockfile (malware, typosquats, install scripts) | Stack3 API, package URLs only |
+| Packages in the lockfile (malware, typosquats, install scripts) | Socket.dev, package URLs only, with your own key |
 
 Nothing in the repository is ever run, imported or opened as a workspace by the scan.
 
@@ -37,10 +51,12 @@ parse). The overall level is the highest finding, and the server's opinion can o
 
 ## What leaves your computer
 
-- **Package URLs** (`pkg:npm/name@version`) of the lockfile go to the Stack3 API, so packages can be checked.
-- **Flagged snippets**, at most 20 per request and 300 characters each, with secrets masked, go to an explanation
-  service **only if** you pick the `api` explanation provider. The default runs a model on your own computer through
-  [Ollama](https://ollama.com), and nothing leaves.
+- **Package URLs** (`pkg:npm/name@version`) of the lockfile go to Socket.dev (`api.socket.dev`), and only if you saved a Socket key, so packages can be checked.
+- **Flagged snippets**, at most 20 per request and 300 characters each, with secrets masked, go to Claude Haiku
+  (Anthropic) or the Stack3 explanation service, depending on `stack3.explain.provider`. The default is `claude`, which
+  needs your own API key (*Stack3: Set Claude API key*, kept in your OS keychain); without a key nothing is sent. By default
+  (`stack3.explain.sendSnippets`) this happens only for repositories cloned from a public GitHub URL. Set it to `never` to
+  send nothing.
 - **Attacker wallets and domains** found in a public repo are reported to the threat graph (`stack3.report.mode`).
 - Source files, paths on your disk, `.env` values and the text of your repo are never sent. `test/egress.test.ts` checks
   this on every build.
@@ -51,9 +67,8 @@ All settings are user-level: a repository cannot change them, and they are disab
 
 | Setting | Meaning |
 |---|---|
-| `stack3.apiUrl` | HTTPS origin of the Stack3 API. Empty means package checks report "not checked". |
-| `stack3.explain.provider` | `ollama` (default, local) or `api`. |
-| `stack3.explain.ollamaModel` | Model for the local explanation (default `qwen2.5-coder:7b`). |
+| `stack3.apiUrl` | HTTPS origin of a Stack3 API, used for threat reports only. Empty means none is sent. Package checks do not use it. |
+| `stack3.explain.provider` | `claude` (default, Claude Haiku with your own key) or `api` (the Stack3 server). |
 | `stack3.explain.sendSnippets` | `publicOnly` (default), `always` or `never`. |
 | `stack3.report.mode` | `publicAuto` (default), `ask` or `never`. |
 | `stack3.scan.limits` | Bounds on files, bytes, depth and time. Hitting one gives `unknown`. |
@@ -63,6 +78,12 @@ All settings are user-level: a repository cannot change them, and they are disab
 
 - **No Solana or other non-EVM chains.** Wallet addresses are recognised for EVM chains only. Packages bundled into a
   repo's own files cannot be mapped to a package.
+- **Package checks need your own Socket key.** Run **Stack3: Set Socket API key** once (the key is stored in your OS keychain and
+  never shipped with the extension; it needs the `packages:list` scope). Without it, package checks read "Package scan
+  unavailable". With it, the extension asks Socket.dev about the packages in the lockfile. Each request costs Socket quota
+  (100 units per batch of up to 500 packages), so a free key allows only a few scans per window; when Socket says it is rate
+  limited the result reads "not checked", never clean. Mock mode (`STACK3_MOCK=1`, development only) returns canned data and
+  is not a real check.
 - **Public GitHub repositories only** can be cloned this way. For a private repo, scan the folder instead.
 - **The warning for a folder opened directly is best effort.** VS Code may show its own trust prompt first, and tasks may
   already have run in a folder you had trusted before Stack3 started.
@@ -75,7 +96,7 @@ All settings are user-level: a repository cannot change them, and they are disab
 
 ## Install from a file
 
-`code --install-extension stack3-vscode-0.1.0.vsix` (Cursor: `cursor --install-extension …`). Check the file against
+`code --install-extension stack3-vscode-0.1.1.vsix` (Cursor: `cursor --install-extension …`). Check the file against
 the published SHA-256 first.
 
 ## Licence

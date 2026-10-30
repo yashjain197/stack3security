@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { createClient } from '../api/client';
+import { withSocket } from '../api/socketClient';
+import { getSocketKey } from '../config/socketKey';
 import { getSettings } from '../config/settings';
 import { excludesFor } from '../scan/exclude';
 import { runScan } from '../scan/scheduler';
@@ -48,7 +50,8 @@ export function registerGuard(context: vscode.ExtensionContext): void {
       },
       client: () => {
         const s = getSettings();
-        return createClient({ baseUrl: s.apiUrl, allowLocalhost: s.allowLocalhost, clientVersion: String((context.extension.packageJSON as { version?: string }).version ?? '') });
+        const base = createClient({ baseUrl: s.apiUrl, allowLocalhost: s.allowLocalhost, clientVersion: String((context.extension.packageJSON as { version?: string }).version ?? '') });
+        return withSocket(base, { apiKey: () => getSocketKey(context) });
       },
       publish: (root: RootInfo, verdict: Verdict) => {
         const rootUri = vscode.Uri.file(root.path);

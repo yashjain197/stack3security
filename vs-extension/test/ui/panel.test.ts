@@ -211,11 +211,11 @@ describe('postExplanation', () => {
     const { handlers } = makeHandlers();
     showVerdictPanel(ctx(), makeRec('critical'), handlers);
     postExplanation(SCAN_ID, { state: 'pending' });
-    postExplanation(SCAN_ID, { state: 'unavailable', reason: 'Ollama is not running.' });
+    postExplanation(SCAN_ID, { state: 'unavailable', reason: 'No Claude API key is set.' });
     __panels[0]!.posted.length = 0;
     __panels[0]!.receive({ type: 'ready' });
     await Promise.resolve();
-    expect(__panels[0]!.posted[1]).toMatchObject({ state: 'unavailable', reason: 'Ollama is not running.' });
+    expect(__panels[0]!.posted[1]).toMatchObject({ state: 'unavailable', reason: 'No Claude API key is set.' });
   });
   test('an explanation for a scan with no open panel is ignored', () => {
     expect(() => postExplanation('cd'.repeat(32), ready)).not.toThrow();

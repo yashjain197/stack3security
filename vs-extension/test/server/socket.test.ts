@@ -152,3 +152,38 @@ describe('what Socket could not check is never read as clean', () => {
     expect(await scan(['pkg:npm/a@1.0.0'])).toEqual({ ok: false, reason: 'Socket response too large' });
   });
 });
+
+describe('retries (opt in, for the interactive extension)', () => {
+  const make = (responses: Response[], retries?: number) => {
+    const sleeps: number[] = [];
+    const fetchImpl = vi.fn(async () => responses.shift() ?? new Response('', { status: 500 }));
+    const scan = createSocketScanner({ apiKey: KEY, fetchImpl: fetchImpl as unknown as typeof fetch, now: () => NOW, ...(retries === undefined ? {} : { retries }), sleep: async (ms) => void sleeps.push(ms) });
+    return { scan, fetchImpl, sleeps };
+  };
+  test('a rate limit then an answer: one retry, waiting as long as Retry-After says (capped at 5 s)', async () => {
+    const { scan, fetchImpl, sleeps } = make([new Response('', { status: 429, headers: { 'retry-after': '3' } }), ndjson(lines(art('a', '1.0.0')))], 1);
+    expect(await scan(['pkg:npm/a@1.0.0'])).toEqual({ ok: true, value: [] });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleeps).toEqual([3000]);
+    const slow = make([new Response('', { status: 429, headers: { 'retry-after': '120' } }), ndjson(lines(art('a', '1.0.0')))], 1);
+    await slow.scan(['pkg:npm/a@1.0.0']);
+    expect(slow.sleeps).toEqual([5000]);
+  });
+  test('a 503 is retried; a 401 is not', async () => {
+    const ok = make([new Response('', { status: 503 }), ndjson(lines(art('a', '1.0.0')))], 1);
+    expect((await ok.scan(['pkg:npm/a@1.0.0'])).ok).toBe(true);
+    const denied = make([new Response('', { status: 401 }), ndjson(lines(art('a', '1.0.0')))], 1);
+    expect(await denied.scan(['pkg:npm/a@1.0.0'])).toEqual({ ok: false, reason: 'Socket returned 401' });
+    expect(denied.fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  test('still limited after the retry: not checked, never clean', async () => {
+    const { scan, fetchImpl } = make([new Response('', { status: 429 }), new Response('', { status: 429 })], 1);
+    expect(await scan(['pkg:npm/a@1.0.0'])).toEqual({ ok: false, reason: 'Socket returned 429' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+  test('without the option nothing is retried', async () => {
+    const { scan, fetchImpl } = make([new Response('', { status: 429 }), ndjson(lines(art('a', '1.0.0')))]);
+    expect((await scan(['pkg:npm/a@1.0.0'])).ok).toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
