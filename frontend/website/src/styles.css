@@ -517,6 +517,42 @@ button:disabled { cursor: progress; }
 .graph-peer-link { padding: 4px 9px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: 12px; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
 .graph-peer-link:hover { border-color: var(--ink); }
 .graph-result-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
+.graph-views { margin-bottom: 16px; }
+.graph-type-picker { align-self: flex-start; margin-bottom: 8px; }
+.graph-lookup-row #graph-chain { min-height: 42px; flex: 0 0 auto; }
+.graph-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 22px; }
+.graph-preview strong { color: var(--ink); }
+.graph-lookup-row input[aria-invalid="true"] { border-color: var(--critical); }
+
+/* Your scans, drawn as a graph */
+.scan-graph { display: flex; flex-direction: column; gap: 4px; }
+.scan-graph-stats { margin-bottom: 12px; }
+.scan-graph-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.scan-graph-toolbar .segmented { margin-bottom: 0; }
+.scan-graph-heading { fill: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.scan-graph-node { cursor: pointer; transition: opacity .15s ease; }
+.scan-graph-node:focus-visible { outline: none; }
+.scan-graph-box { fill: var(--bg); stroke: var(--line-strong); stroke-width: 1.2; transition: stroke .15s ease; }
+.scan-graph-node:hover .scan-graph-box, .scan-graph-node:focus-visible .scan-graph-box { stroke: var(--ink); stroke-width: 1.8; }
+.scan-graph-kind { fill: var(--muted); font-size: 9.5px; font-weight: 700; letter-spacing: .06em; }
+.scan-graph-id { fill: var(--ink); font-family: var(--mono); font-size: 11.5px; }
+.scan-graph-count { fill: var(--muted); font-size: 11px; font-weight: 600; text-anchor: end; }
+.scan-graph-link { fill: none; stroke-width: 1.6; opacity: .45; transition: opacity .15s ease, stroke-width .15s ease; }
+.scan-graph-link--active { opacity: 1; stroke-width: 2.4; }
+.scan-graph-dim { opacity: .15; }
+.scan-graph-findings { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.scan-graph-findings h3 { margin: 0 0 12px; color: var(--ink); font-size: 16px; font-weight: 600; }
+.scan-graph-findings h3 span { color: var(--faint); font-weight: 500; }
+.scan-graph-findings ul { padding: 0; margin: 0 0 12px; list-style: none; }
+.scan-graph-findings li { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.scan-graph-findings li .verdict { align-self: start; justify-self: start; }
+.scan-graph-findings li strong { display: block; color: var(--ink); font-size: 14px; }
+.scan-graph-findings li p { margin: 2px 0 4px; color: var(--muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.scan-graph-target { color: var(--ink-2); font-family: var(--mono); font-size: 12px; text-decoration: underline; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .scan-graph-findings li { grid-template-columns: 1fr; gap: 6px; }
+  .graph-lookup-row #graph-chain { width: 100%; }
+}
 .report-panel textarea { width: 100%; padding: 11px 12px; resize: vertical; }
 .report-row { position: relative; min-width: 0; padding: 14px; margin: 4px 0 0; border: 1px solid var(--line); border-radius: var(--radius); }
 .report-row legend { padding: 0 6px; color: var(--faint); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }

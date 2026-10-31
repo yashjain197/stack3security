@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
-import { useApi } from "../lib/session";
+import { useApi, useSession } from "../lib/session";
+import { chains } from "../lib/chains";
 import {
+  detectNodeType,
   edgeTypes,
   idRules,
   isNodeType,
+  nodeTypeLabels,
   nodeTypes,
+  normalizeNodeInput,
   riskLevels,
   seedExamples,
-  validateNodeId,
 } from "../lib/graph-model";
+import { useScanHistory } from "../lib/scans";
 import type { GraphData, GraphNode, GraphNodeType } from "../types";
 import { GraphNodeNotFound, GraphResult, type PeerRef } from "../components/graph";
+import { ScanFindingsGraph } from "../components/scan-graph";
 import { ResultSkeleton } from "../components/ui";
+
+type LookupType = GraphNodeType | "auto";
 
 type NodeDraft = {
   key: number;
@@ -58,9 +65,14 @@ export function GraphPage() {
   const [params] = useSearchParams();
   const paramType = isNodeType(params.get("type")) ? (params.get("type") as GraphNodeType) : "wallet";
   const paramId = params.get("id") ?? "";
+  const { user } = useSession();
+  const { records } = useScanHistory(user?.id);
+  const viewParam = params.get("view");
+  const view = viewParam === "scans" || viewParam === "lookup" ? viewParam : paramId || !records.length ? "lookup" : "scans";
 
-  const [lookupType, setLookupType] = useState<GraphNodeType>(paramType);
+  const [lookupType, setLookupType] = useState<LookupType>(paramId ? paramType : "auto");
   const [lookupId, setLookupId] = useState(paramId);
+  const [chainId, setChainId] = useState(1);
   const [lookupError, setLookupError] = useState("");
   const [graph, setGraph] = useState<GraphState>({ status: "idle" });
 
@@ -74,13 +86,18 @@ export function GraphPage() {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setLookupType(paramType);
-    setLookupId(paramId);
     if (!paramId) {
       setGraph({ status: "idle" });
       return;
     }
-    if (!isNodeType(params.get("type"))) return;
+    // Stay on auto-detect when it would have picked this type anyway, so the next paste can be anything.
+    setLookupType((current) => (current === "auto" && detectNodeType(paramId) === paramType ? "auto" : paramType));
+    setLookupId(paramId);
+    setLookupError("");
+    if (!isNodeType(params.get("type"))) {
+      setGraph({ status: "error", error: new Error("Unknown node type. Choose wallet, domain, package, repo or endpoint.") });
+      return;
+    }
     const controller = new AbortController();
     setGraph({ status: "loading" });
     api
@@ -107,15 +124,28 @@ export function GraphPage() {
     navigate(`/dashboard/graph?type=${encodeURIComponent(peer.type)}&id=${encodeURIComponent(peer.id)}`);
   }
 
+  const detectedType = lookupType === "auto" ? detectNodeType(lookupId) : lookupType;
+  const preview = detectedType ? normalizeNodeInput(detectedType, lookupId, chainId) : null;
+  const needsChain = detectedType === "wallet" && !/^\d+:/.test(lookupId.trim());
+
   function lookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const invalid = validateNodeId(lookupType, lookupId.trim());
-    if (invalid) {
-      setLookupError(invalid);
+    if (!lookupId.trim()) {
+      setLookupError("Paste a wallet address, domain, package, GitHub repo or URL to look up.");
+      return;
+    }
+    if (!detectedType || !preview) {
+      setLookupError(
+        "We couldn't tell what this is. Pick a type above, or paste something like 0x…, example.io, name@1.2.3, owner/repo or https://….",
+      );
+      return;
+    }
+    if (preview.id === undefined) {
+      setLookupError(preview.error);
       return;
     }
     setLookupError("");
-    navigate(`/dashboard/graph?type=${encodeURIComponent(lookupType)}&id=${encodeURIComponent(lookupId.trim())}`);
+    navigate(`/dashboard/graph?type=${encodeURIComponent(detectedType)}&id=${encodeURIComponent(preview.id)}`);
   }
 
   function prefillReport(prefill: Partial<GraphNode>) {
@@ -152,10 +182,13 @@ export function GraphPage() {
     const trimmedReason = reason.trim();
     if (!trimmedReason) return { error: "Describe why you are reporting this." };
     const reportNodes: Record<string, string>[] = [];
+    // Edges may name a node by what was typed or by its normalised id.
+    const ids = new Map<string, string>();
     for (const row of nodes) {
-      const id = row.id.trim();
-      const invalid = validateNodeId(row.type, id);
-      if (invalid) return { error: invalid };
+      const parsed = normalizeNodeInput(row.type, row.id);
+      if (parsed.id === undefined) return { error: parsed.error };
+      const id = parsed.id;
+      ids.set(row.id.trim(), id).set(id, id);
       const node: Record<string, string> = { type: row.type, id, risk: row.risk };
       if (row.category.trim()) node.category = row.category.trim();
       if (row.type === "wallet" && row.label.trim()) node.label = row.label.trim();
@@ -163,13 +196,14 @@ export function GraphPage() {
       reportNodes.push(node);
     }
     if (!reportNodes.length) return { error: "Add at least one node." };
-    const ids = new Set(reportNodes.map((node) => node.id));
     const reportEdges: Record<string, string>[] = [];
     for (const row of edges) {
-      const edge: Record<string, string> = { type: row.type, fromId: row.fromId.trim(), toId: row.toId.trim() };
-      if (!ids.has(edge.fromId) || !ids.has(edge.toId)) {
+      const fromId = ids.get(row.fromId.trim());
+      const toId = ids.get(row.toId.trim());
+      if (!fromId || !toId) {
         return { error: "Each edge's from and to ids must match a node in this report." };
       }
+      const edge: Record<string, string> = { type: row.type, fromId, toId };
       if (row.type === "funded" && row.txHash.trim()) edge.txHash = row.txHash.trim();
       reportEdges.push(edge);
     }
@@ -214,10 +248,34 @@ export function GraphPage() {
           <div className="eyebrow">THREAT INTELLIGENCE</div>
           <h1>Threat graph</h1>
           <p>
-            Look up a wallet, domain, package, repo, or endpoint and see what it is connected to.
+            See how your scan findings connect, or look up any wallet, domain, package, repo or endpoint.
           </p>
         </div>
       </div>
+      <div className="segmented graph-views" role="tablist" aria-label="Threat graph view">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "scans"}
+          className={`segmented-option${view === "scans" ? " segmented-option--active" : ""}`}
+          onClick={() => navigate("/dashboard/graph?view=scans")}
+        >
+          Your scans{records.length ? ` (${records.length})` : ""}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "lookup"}
+          className={`segmented-option${view === "lookup" ? " segmented-option--active" : ""}`}
+          onClick={() => navigate(paramId ? `/dashboard/graph?type=${encodeURIComponent(paramType)}&id=${encodeURIComponent(paramId)}` : "/dashboard/graph?view=lookup")}
+        >
+          Look up a node
+        </button>
+      </div>
+      {view === "scans" ? (
+        <ScanFindingsGraph records={records} onOpenPeer={openPeer} />
+      ) : (
+        <>
       <section className="panel graph-lookup-panel">
         <div className="panel-header">
           <div>
@@ -227,31 +285,70 @@ export function GraphPage() {
           </div>
         </div>
         <form id="graph-form" className="form-stack" noValidate onSubmit={lookup}>
-          <label htmlFor="graph-id">Node</label>
+          <div className="segmented graph-type-picker" role="radiogroup" aria-label="Node type">
+            {(["auto", ...nodeTypes] as LookupType[]).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={lookupType === value}
+                data-type={value}
+                className={`segmented-option${lookupType === value ? " segmented-option--active" : ""}`}
+                onClick={() => {
+                  setLookupType(value);
+                  setLookupError("");
+                }}
+              >
+                {value === "auto" ? "Auto-detect" : nodeTypeLabels[value]}
+              </button>
+            ))}
+          </div>
+          <label htmlFor="graph-id">
+            {lookupType === "auto" ? "Wallet, domain, package, repo or URL" : nodeTypeLabels[lookupType]}
+          </label>
           <div className="graph-lookup-row">
-            <select
-              id="graph-type"
-              name="type"
-              aria-label="Node type"
-              value={lookupType}
-              onChange={(event) => setLookupType(event.target.value as GraphNodeType)}
-            >
-              {nodeTypes.map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </select>
             <input
               id="graph-id"
               name="id"
               type="text"
+              autoComplete="off"
+              spellCheck={false}
               value={lookupId}
-              placeholder={idRules[lookupType].placeholder}
+              placeholder={lookupType === "auto" ? "Paste 0x…, example.io, name@1.2.3, owner/repo or https://…" : idRules[lookupType].placeholder}
               aria-describedby="graph-helper graph-error"
-              onChange={(event) => setLookupId(event.target.value)}
+              aria-invalid={Boolean(lookupError)}
+              onChange={(event) => {
+                setLookupId(event.target.value);
+                setLookupError("");
+              }}
             />
+            {needsChain ? (
+              <select
+                id="graph-chain"
+                aria-label="Chain"
+                value={chainId}
+                onChange={(event) => setChainId(Number(event.target.value))}
+              >
+                {chains.map((chain) => (
+                  <option key={chain.id} value={chain.id}>{chain.name}</option>
+                ))}
+              </select>
+            ) : null}
             <button className="button button--primary" type="submit">Look up</button>
           </div>
-          <small id="graph-helper" className="input-helper">{idRules[lookupType].hint}</small>
+          <small id="graph-helper" className="input-helper graph-preview">
+            {detectedType && preview?.id ? (
+              <>
+                {lookupType === "auto" ? "Detected" : "Looks up"}{" "}
+                <strong>{nodeTypeLabels[detectedType].toLowerCase()}</strong>{" "}
+                <code className="graph-code">{preview.id}</code>
+              </>
+            ) : detectedType ? (
+              `Accepts ${idRules[detectedType].hint}.`
+            ) : (
+              "The type is detected from what you paste. Case, www., URL paths, .git and npm links are normalised for you."
+            )}
+          </small>
           <p id="graph-error" className="form-error" role="alert" hidden={!lookupError}>{lookupError}</p>
         </form>
         <div className="chip-row">
@@ -468,6 +565,8 @@ export function GraphPage() {
           <p id="report-success" className="report-success" role="status" hidden={!reportSuccess}>{reportSuccess}</p>
         </form>
       </section>
+        </>
+      )}
     </>
   );
 }
