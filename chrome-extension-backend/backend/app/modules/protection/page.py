@@ -78,7 +78,8 @@ async def scan_page(db: AsyncSession, body: PageScanIn) -> Verdict:
         found.extend(extra.findings)
         skipped.extend(extra.not_checked)
 
-    if signals.hidden_iframe and (signals.wallet_connect or signals.fullscreen_overlay):
+    # Login and 2FA modals pair a full-screen overlay with a hidden captcha frame; only a wallet prompt makes it risky.
+    if signals.hidden_iframe and signals.wallet_connect:
         found.append(
             finding(
                 layer=Layer.SITE,

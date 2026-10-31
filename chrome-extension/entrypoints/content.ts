@@ -14,8 +14,13 @@ const PRIVATE_KEY = /\bprivate[\s_-]*key\b/i;
 // example sentence that merely mentions one ("e.g. this page asked for my seed phrase").
 const ENTRY_CUE = /\b(enter|type|paste|input|import|restore|provide|your)\b/i;
 const EXAMPLE = /^\s*(e\.?\s?g\b|example|for example|i\.?\s?e\b)/i;
-// Only free-text boxes can receive a phrase or key.
-const TEXT_TYPES = new Set(["", "text", "password", "tel"]);
+// Only free-text boxes can receive a phrase or key. Phone-style ("tel") boxes are left out: sites use
+// them for SMS and 2FA codes, and a recovery phrase or private key does not fit a phone keypad.
+const TEXT_TYPES = new Set(["", "text", "password"]);
+// One-time codes (email, SMS or authenticator 2FA, PINs) are short numeric secrets, not wallet secrets.
+const ONE_TIME_CODE = /(?<![a-z])(otp|one[\s_-]?time|2fa|mfa|totp|passcode|pin|verification[\s_-]?code|auth(entication|enticator)?[\s_-]?code|security[\s_-]?code|confirm(ation)?[\s_-]?code|sms[\s_-]?code|digit)(?![a-z])/i;
+// A 12-word phrase or a 64-character key cannot fit in a box this short.
+const MAX_CODE_LENGTH = 8;
 
 /** A fixed element covering most of the viewport, as fake wallet pop-ups use. */
 function hasFullscreenOverlay(): boolean {
@@ -61,8 +66,20 @@ function isTextEntry(field: Element): boolean {
   return field.getClientRects().length > 0;
 }
 
+/** A verification-code box: built for a short numeric code, or named as one without naming a wallet secret. */
+function isOneTimeCode(field: Element): boolean {
+  const input = field as HTMLInputElement;
+  if ((field.getAttribute("autocomplete") ?? "").toLowerCase().includes("one-time-code")) return true;
+  if (["numeric", "decimal", "tel"].includes((field.getAttribute("inputmode") ?? "").toLowerCase())) return true;
+  if (input.maxLength > 0 && input.maxLength <= MAX_CODE_LENGTH) return true;
+  // Split camelCase ("totpPin") so the name parts match on their own.
+  const text = `${attributeText(field)} ${labelText(field)} ${field.getAttribute("placeholder") ?? ""}`.replace(/([a-z])([A-Z])/g, "$1 $2");
+  return ONE_TIME_CODE.test(text) && !SEED_PHRASE.test(text) && !PRIVATE_KEY.test(text);
+}
+
 /** Does this field ask the user to type the secret described by `pattern`? */
 function asksFor(field: Element, pattern: RegExp): boolean {
+  if (isOneTimeCode(field)) return false;
   if (pattern.test(`${attributeText(field)} ${labelText(field)}`)) return true;
   const placeholder = field.getAttribute("placeholder") ?? "";
   return !EXAMPLE.test(placeholder) && ENTRY_CUE.test(placeholder) && pattern.test(placeholder);
@@ -77,7 +94,10 @@ function collectSignals(): PageSignals {
   for (const field of fields) {
     if (asksFor(field, SEED_PHRASE)) seedPhraseField = true;
     if (asksFor(field, PRIVATE_KEY)) asksForPrivateKey = true;
-    if (/^(word|mnemonic|seed)[\s_-]?\d{1,2}$/i.test(field.getAttribute("name") ?? "")) wordInputs += 1;
+    // Recovery words are letters, so a numeric code box is never one; a short maxlength is allowed (words are ≤ 8 letters).
+    const numericBox = ["numeric", "decimal", "tel"].includes((field.getAttribute("inputmode") ?? "").toLowerCase())
+      || (field.getAttribute("autocomplete") ?? "").toLowerCase().includes("one-time-code");
+    if (!numericBox && /^(word|mnemonic|seed)[\s_-]?\d{1,2}$/i.test(field.getAttribute("name") ?? "")) wordInputs += 1;
   }
 
   const externalScriptHosts = new Set<string>();
