@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { Badge } from "../components/ui";
 import { PublicShell } from "../components/PublicShell";
+import logo from "../assets/logo-dark.svg";
 
 export function LandingPage() {
   return (
@@ -42,7 +43,7 @@ export function LandingPage() {
           </div>
           <div className="visual-body">
             <div className="visual-sidebar">
-              <span className="mini-mark"><Icon name="shield" /></span>
+              <img className="mini-mark" src={logo} alt="" width={22} height={22} />
               <i></i>
               <i></i>
               <i></i>
