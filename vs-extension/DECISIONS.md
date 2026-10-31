@@ -111,7 +111,7 @@ This file is kept separate from [`ARCHITECTURE.md`](./ARCHITECTURE.md). Each ent
 - **Status:** Accepted, 2026-10-30 (the owner chose MIT)
 - **Decision:** `LICENSE` is the MIT licence, copyright "The Stack3 Security team", and `package.json` says `"license": "MIT"`. `"private": true` is removed so `vsce publish` works. Publishing steps, scripts and the tag-driven workflow are in `PUBLISHING.md`.
 - **Why:** An open licence is needed for a public Marketplace listing, and MIT keeps the terms simple. The server-side scan notice ("known patterns only, not a guarantee") stays in the README.
-- **Still open:** the copyright holder's legal name; the Marketplace publisher ID `stack3` must be created by a person.
+- **Still open:** the copyright holder's legal name; the Marketplace publisher ID `Stack3Security` must be created by a person.
 
 ### D-14: ReDoS check and what it changed
 - **Status:** Accepted, 2026-10-30

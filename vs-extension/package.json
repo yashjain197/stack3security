@@ -2,8 +2,8 @@
   "name": "stack3-vscode",
   "displayName": "Stack3 Security",
   "description": "Scan a repo before you open it: auto-run files, install scripts, malicious packages and leaked secrets.",
-  "version": "0.1.1",
-  "publisher": "stack3",
+  "version": "0.1.2",
+  "publisher": "Stack3Security",
   "license": "MIT",
   "icon": "images/icon.png",
   "galleryBanner": {

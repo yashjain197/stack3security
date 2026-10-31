@@ -5,7 +5,7 @@ show that you stay in control of the clone.
 
 ## Before you go on stage
 
-- Install the extension: `npm run package`, then `code --install-extension stack3-vscode-0.1.1.vsix`.
+- Install the extension: `npm run package`, then `code --install-extension stack3-vscode-0.1.2.vsix`.
 - Explanation: run **Stack3: Set Claude API key** once (the key is stored in the OS keychain). Claude Haiku then writes the
   plain-English explanation under the verdict in a few seconds. `node --env-file=.env test/integration/claude.mjs` passed
   6/6 on 2026-10-30 (3.3 s). Without a key the verdict still shows; only the explanation is missing. It never changes the verdict.
@@ -114,12 +114,12 @@ Keep each answer to one line.
 
 ## Handing the extension to judges
 
-There is no Marketplace listing yet (`stack3.stack3-vscode` is not found there), so nobody else can install it from the
+There is no Marketplace listing yet (`Stack3Security.stack3-vscode` is not found there), so nobody else can install it from the
 Marketplace. Give them the file:
 
-- `vs-extension/stack3-vscode-0.1.1.vsix` (rebuild with `npm run package`), and the SHA-256 in
-  `stack3-vscode-0.1.1.vsix.sha256` next to it.
-- They install it with `code --install-extension stack3-vscode-0.1.1.vsix` (Cursor: `cursor --install-extension ...`).
+- `vs-extension/stack3-vscode-0.1.2.vsix` (rebuild with `npm run package`), and the SHA-256 in
+  `stack3-vscode-0.1.2.vsix.sha256` next to it.
+- They install it with `code --install-extension stack3-vscode-0.1.2.vsix` (Cursor: `cursor --install-extension ...`).
 - Publishing to the Marketplace needs the publisher account and PAT in `PUBLISHING.md`.
 
 ## Rehearse this order twice
