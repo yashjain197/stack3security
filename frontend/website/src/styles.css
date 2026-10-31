@@ -213,6 +213,20 @@ button:disabled { cursor: progress; }
 .legal-body ul { padding-left: 20px; margin: 0 0 10px; }
 .legal-body a { color: var(--ink); text-decoration: underline; overflow-wrap: anywhere; }
 .legal-signoff { padding-top: 28px; border-top: 1px solid var(--line); }
+.download-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.download-card { min-width: 0; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius); }
+.download-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.download-card-head h2 { margin: 0; color: var(--ink); font-size: 20px; font-weight: 600; }
+.download-card h3 { margin: 28px 0 8px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink); font-size: 15px; font-weight: 600; }
+.download-card p, .download-card li { color: var(--ink-2); font-size: 14px; line-height: 1.75; }
+.download-card p { margin: 0 0 12px; }
+.download-card a:not(.button) { color: var(--ink); text-decoration: underline; }
+.download-card .button { margin: 4px 0 4px; }
+.download-card code, .download-card kbd { padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); font-family: var(--mono); font-size: 12px; }
+.download-command { margin: 0 0 12px; padding: 10px 12px; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.download-command code { padding: 0; border: 0; background: none; color: var(--ink); white-space: pre; }
+.download-steps { padding-left: 20px; margin: 0 0 12px; }
+@media (max-width: 760px) { .download-grid { grid-template-columns: 1fr; } .download-card { padding: 20px; } }
 
 .pricing-page { padding: 24px 32px 80px; }
 .pricing-hero { max-width: 1050px; padding: 44px 0 28px; margin: auto; text-align: center; }

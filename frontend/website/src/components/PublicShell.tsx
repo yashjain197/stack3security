@@ -23,6 +23,7 @@ export function PublicHeader() {
         <Link to="/#product">Product</Link>
         <Link to="/how-it-works">How it works</Link>
         <Link to="/pricing">Pricing</Link>
+        <Link to="/download">Download</Link>
       </nav>
       <div className="public-actions">
         <Link className="sign-in" to={signedIn ? "/dashboard/settings" : "/login"}>
@@ -53,6 +54,7 @@ export function PublicFooter() {
         <Link to="/#product">Product</Link>
         <Link to="/how-it-works">How it works</Link>
         <Link to="/pricing">Pricing</Link>
+        <Link to="/download">Download</Link>
         <Link to="/privacy-policy">Privacy Policy</Link>
         <a href="mailto:hello@stack3security.example">Contact</a>
       </div>
