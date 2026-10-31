@@ -7,6 +7,7 @@ import { AppShell } from "./components/AppShell";
 import { LandingPage } from "./pages/LandingPage";
 import { HowItWorksPage } from "./pages/HowItWorksPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ScannerPage } from "./pages/ScannerPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
@@ -29,6 +30,7 @@ const routeTitles: Record<string, string> = {
   "/": "Stack3 Security — Verify what happens underneath",
   "/pricing": "Pricing — Stack3 Security",
   "/how-it-works": "How it works — Stack3 Security",
+  "/privacy-policy": "Privacy Policy — Stack3 Security",
   "/dashboard": "Security overview — Stack3 Security",
   "/dashboard/scanner": "Website scanner — Stack3 Security",
   "/dashboard/transactions": "Transaction analyzer — Stack3 Security",
@@ -109,6 +111,7 @@ export function App({ api, startupError }: { api: ApiClient; startupError: ApiEr
           <Route path="/" element={<LandingPage />} />
           <Route path="/how-it-works" element={<HowItWorksPage />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/login" element={<PublicShell mainClassName="account-page"><LoginPage /></PublicShell>} />
           <Route path="/dashboard" element={<DashboardRoute><DashboardPage /></DashboardRoute>} />
           <Route path="/dashboard/scanner" element={<DashboardRoute><ScannerPage /></DashboardRoute>} />

@@ -204,6 +204,15 @@ button:disabled { cursor: progress; }
 .not-promises { padding: 30px; margin-top: 44px; border: 1px solid var(--line); border-radius: var(--radius); }
 .not-promises h2 { margin: 12px 0 18px; font-size: 24px; }
 .not-promises ul { padding-left: 18px; margin: 0; color: var(--ink-2); font-size: 14px; line-height: 2.1; }
+.legal-body { max-width: 760px; }
+.legal-body section { padding: 28px 0; border-top: 1px solid var(--line); }
+.legal-body h2 { margin: 0 0 12px; color: var(--ink); font-size: 20px; font-weight: 600; }
+.legal-body h3 { margin: 20px 0 8px; color: var(--ink); font-size: 15px; font-weight: 600; }
+.legal-body p, .legal-body li { color: var(--ink-2); font-size: 15px; line-height: 1.75; }
+.legal-body p { margin: 0 0 10px; }
+.legal-body ul { padding-left: 20px; margin: 0 0 10px; }
+.legal-body a { color: var(--ink); text-decoration: underline; overflow-wrap: anywhere; }
+.legal-signoff { padding-top: 28px; border-top: 1px solid var(--line); }
 
 .pricing-page { padding: 24px 32px 80px; }
 .pricing-hero { max-width: 1050px; padding: 44px 0 28px; margin: auto; text-align: center; }
